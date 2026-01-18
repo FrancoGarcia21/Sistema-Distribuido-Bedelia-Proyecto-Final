@@ -1,0 +1,31 @@
+# =============================
+# App_Bedelia – Dockerfile
+# =============================
+
+FROM python:3.11-slim
+
+# Evita buffers en logs
+ENV PYTHONUNBUFFERED=1
+
+# Directorio de trabajo
+WORKDIR /app
+
+# Dependencias del sistema (mínimas)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar dependencias
+COPY requirements.txt .
+
+# Instalar dependencias Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código de la aplicación
+COPY . .
+
+# Puerto de la aplicación
+EXPOSE 5000
+
+# Comando de inicio
+CMD ["python", "app.py"]
