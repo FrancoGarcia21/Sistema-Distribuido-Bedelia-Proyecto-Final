@@ -26,9 +26,9 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 
 MONGO_URI = os.getenv(
-"MONGO_URI",
-"mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/"
-"smartcampus?replicaSet=rs0"
+    "MONGO_URI",
+    "mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/"
+    "smartcampus?replicaSet=rs0"
 )
 
 
