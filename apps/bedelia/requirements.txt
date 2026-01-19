@@ -1,7 +1,6 @@
 # =============================
 # App_Bedelia – Dependencies
 # =============================
-python
 
 # Web framework
 Flask==3.0.0

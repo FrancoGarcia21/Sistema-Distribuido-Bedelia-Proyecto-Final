@@ -1,3 +1,261 @@
+# version: "3.9"
+
+# networks:
+#   smartcampus_net:
+#     driver: bridge
+
+# volumes:
+#   mongo_primary_data:
+#   mongo_secondary1_data:
+#   mongo_secondary2_data:
+#   redis_data:
+#   emqx_data:
+#   emqx_log:
+
+# services:
+
+#   # =========================
+#   # MongoDB Replica Set
+#   # =========================
+
+#   mongo-primary:
+#     image: mongo:6.0
+#     container_name: mongo-primary
+#     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+#     ports:
+#       - "27017:27017"
+#     volumes:
+#       - mongo_primary_data:/data/db
+#     networks:
+#       - smartcampus_net
+
+#   mongo-secondary1:
+#     image: mongo:6.0
+#     container_name: mongo-secondary1
+#     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+#     ports:
+#       - "27018:27017"
+#     volumes:
+#       - mongo_secondary1_data:/data/db
+#     networks:
+#       - smartcampus_net
+
+#   mongo-secondary2:
+#     image: mongo:6.0
+#     container_name: mongo-secondary2
+#     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+#     ports:
+#       - "27019:27017"
+#     volumes:
+#       - mongo_secondary2_data:/data/db
+#     networks:
+#       - smartcampus_net
+
+#   # =========================
+#   # MongoDB Replica Set Init
+#   # =========================
+
+#   mongo-init:
+#     image: mongo:6.0
+#     container_name: mongo-init
+#     depends_on:
+#       - mongo-primary
+#       - mongo-secondary1
+#       - mongo-secondary2
+#     volumes:
+#       - ./mongo-init-replica.sh:/docker-entrypoint-initdb.d/mongo-init-replica.sh:ro
+#     entrypoint: ["bash", "/docker-entrypoint-initdb.d/mongo-init-replica.sh"]
+#     restart: "no"
+#     networks:
+#       - smartcampus_net
+
+#   # =========================
+#   # Redis con Persistencia
+#   # =========================
+
+#   redis:
+#     image: redis:7.2
+#     container_name: redis
+#     command: ["redis-server", "--appendonly", "yes"]
+#     ports:
+#       - "6379:6379"
+#     volumes:
+#       - redis_data:/data
+#     networks:
+#       - smartcampus_net
+
+#   # =========================
+#   # EMQX Broker MQTT
+#   # =========================
+
+#   emqx:
+#     image: emqx/emqx:5.5
+#     container_name: emqx
+#     ports:
+#       - "1883:1883"
+#       - "8883:8883"
+#       - "8083:8083"
+#       - "8084:8084"
+#       - "18083:18083"
+#     environment:
+#       EMQX_NAME: emqx
+#       EMQX_HOST: emqx
+#       EMQX_NODE_NAME: emqx@emqx
+#       EMQX_ALLOW_ANONYMOUS: "false"
+#       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+#       EMQX_DASHBOARD__DEFAULT_PASSWORD: admin
+#       EMQX_LISTENER__SSL__EXTERNAL__KEYFILE: /opt/emqx/etc/certs/key.pem
+#       EMQX_LISTENER__SSL__EXTERNAL__CERTFILE: /opt/emqx/etc/certs/cert.pem
+#     volumes:
+#       - emqx_data:/opt/emqx/data
+#       - emqx_log:/opt/emqx/log
+#       - ./emqx/certs:/opt/emqx/etc/certs
+#     networks:
+#       - smartcampus_net
+
+#   # =========================
+#   # Nginx Reverse Proxy
+#   # =========================
+
+#   nginx:
+#     image: nginx:1.25
+#     container_name: nginx
+#     ports:
+#       - "80:80"
+#     volumes:
+#       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+#     depends_on:
+#       app_bedelia:
+#         condition: service_healthy
+#       # - app_profesor
+#       # - app_alumno
+#     networks:
+#       - smartcampus_net
+
+#   # =========================
+#   # Aplicaciones Flask
+#   # =========================
+
+#   # app_bedelia:
+#   #   build: ./apps/bedelia
+#   #   container_name: app_bedelia
+#   #   environment:
+#   #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+#   #     REDIS_HOST: redis
+#   #     EMQX_HOST: emqx
+#   #   depends_on:
+#   #     - mongo-primary
+#   #     - redis
+#   #     - emqx
+#   #   networks:
+#   #     - smartcampus_net
+  
+#   # =========================
+#   # BEDELIA
+#   # =========================
+
+#   app_bedelia:
+#     build:
+#       context: ./apps/bedelia
+#     container_name: app_bedelia
+#     depends_on:
+#       - mongo-primary
+#       - mongo-secondary1
+#       - mongo-secondary2
+#       - mongo-init
+#       - redis
+#       - emqx
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+#       interval: 10s
+#       retries: 5
+#     environment:
+#       APP_NAME: App_bedelia 
+#       DEBUG: "true"
+#       MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+#       MONGO_DB_NAME: smartcampus
+#       REDIS_HOST: redis
+#       REDIS_PORT: "6379"
+#       MQTT_BROKER_HOST: emqx
+#       MQTT_BROKER_PORT: "8883"
+#     volumes:
+#       - ./infra/certs:/opt/certs:ro
+#     ports:
+#       - "5000:5000"
+#     restart: unless-stopped
+
+#   # =========================
+#   # PROFESOR
+#   # =========================
+
+#   # app_profesor:
+#   #   build: ./apps/profesor
+#   #   container_name: app_profesor
+#   #   environment:
+#   #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+#   #     REDIS_HOST: redis
+#   #     EMQX_HOST: emqx
+#   #   depends_on:
+#   #     - mongo-primary
+#   #     - redis
+#   #     - emqx
+#   #   networks:
+#   #     - smartcampus_net
+
+#   # =========================
+#   # ALUMNO
+#   # =========================
+
+#   # app_alumno:
+#   #   build: ./apps/alumno
+#   #   container_name: app_alumno
+#   #   environment:
+#   #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+#   #     REDIS_HOST: redis
+#   #     EMQX_HOST: emqx
+#   #   depends_on:
+#   #     - mongo-primary
+#   #     - redis
+#   #     - emqx
+#   #   networks:
+#   #   - smartcampus_net
+
+#   # =========================
+#   # Observabilidad – Prometheus
+#   # =========================
+
+#   prometheus:
+#     image: prom/prometheus:latest
+#     container_name: prometheus
+#     volumes:
+#       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+#     command:
+#       - "--config.file=/etc/prometheus/prometheus.yml"
+#     ports:
+#       - "9090:9090"
+
+#   #  prometheus:
+#   #   image: prom/prometheus:v2.52.0
+#   #   container_name: prometheus
+#   #   ports:
+#   #   - "9090:9090"
+#   #   volumes:
+#   #   - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+#   #   networks:
+#   #   - smartcampus_net
+#   #   mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+#   #   MONGO_DB_NAME: smartcampus
+#   #   REDIS_HOST: redis
+#   #   REDIS_PORT: 6379
+#   #   MQTT_BROKER_HOST: emqx
+#   #   MQTT_BROKER_PORT: 8883
+#   #   volumes:
+#   #   - ./infra/certs:/opt/certs:ro
+#   #   ports:
+#   #   - "5000:5000"
+#   #   restart: unless-stopped   
+
+########################################################################################3
 version: "3.9"
 
 networks:
@@ -13,6 +271,20 @@ volumes:
   emqx_log:
 
 services:
+  # ========================
+  # Generación de Certificados TLS
+  # =========================
+
+  certs-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile.certs
+    container_name: certs-generator
+    volumes:
+      - ./infra/certs:/certs
+    restart: "no"
+    networks:
+      - smartcampus_net
 
   # =========================
   # MongoDB Replica Set
@@ -28,6 +300,13 @@ services:
       - mongo_primary_data:/data/db
     networks:
       - smartcampus_net
+    healthcheck:
+      test: |
+        mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   mongo-secondary1:
     image: mongo:6.0
@@ -39,6 +318,13 @@ services:
       - mongo_secondary1_data:/data/db
     networks:
       - smartcampus_net
+    healthcheck:
+      test: |
+        mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   mongo-secondary2:
     image: mongo:6.0
@@ -50,39 +336,60 @@ services:
       - mongo_secondary2_data:/data/db
     networks:
       - smartcampus_net
+    healthcheck:
+      test: |
+        mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # =========================
   # MongoDB Replica Set Init
   # =========================
 
   mongo-init:
-    image: mongo:6.0
+    build:
+      context: .
+      dockerfile: Dockerfile.mongo-init
     container_name: mongo-init
     depends_on:
-      - mongo-primary
-      - mongo-secondary1
-      - mongo-secondary2
-    volumes:
-      - ./mongo-init-replica.sh:/docker-entrypoint-initdb.d/mongo-init-replica.sh:ro
-    entrypoint: ["bash", "/docker-entrypoint-initdb.d/mongo-init-replica.sh"]
+      mongo-primary:
+        condition: service_healthy
+      mongo-secondary1:
+        condition: service_healthy
+      mongo-secondary2:
+        condition: service_healthy
     restart: "no"
     networks:
       - smartcampus_net
 
   # =========================
-  # Redis con Persistencia
+  # Redis con Persistencia RDB + AOF
   # =========================
 
   redis:
     image: redis:7.2
     container_name: redis
-    command: ["redis-server", "--appendonly", "yes"]
+    command: 
+      - redis-server
+      - --appendonly yes
+      - --appendfsync everysec
+      - --save 60 1
+      - --save 300 10
+      - --save 900 100
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
       - smartcampus_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   # =========================
   # EMQX Broker MQTT
@@ -91,6 +398,9 @@ services:
   emqx:
     image: emqx/emqx:5.5
     container_name: emqx
+    depends_on:
+      certs-generator:
+        condition: service_completed_successfully
     ports:
       - "1883:1883"
       - "8883:8883"
@@ -104,14 +414,24 @@ services:
       EMQX_ALLOW_ANONYMOUS: "false"
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
       EMQX_DASHBOARD__DEFAULT_PASSWORD: admin
-      EMQX_LISTENER__SSL__EXTERNAL__KEYFILE: /opt/emqx/etc/certs/key.pem
-      EMQX_LISTENER__SSL__EXTERNAL__CERTFILE: /opt/emqx/etc/certs/cert.pem
+      # Configuración TLS para EMQX 5.5
+      EMQX_LISTENERS__SSL__DEFAULT__BIND: "0.0.0.0:8883"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CACERTFILE: /opt/emqx/etc/certs/ca.crt
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE: /opt/emqx/etc/certs/server.crt
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: /opt/emqx/etc/certs/server.key
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: verify_none
     volumes:
       - emqx_data:/opt/emqx/data
       - emqx_log:/opt/emqx/log
-      - ./emqx/certs:/opt/emqx/etc/certs
+      - ./infra/certs:/opt/emqx/etc/certs:ro
     networks:
       - smartcampus_net
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # =========================
   # Nginx Reverse Proxy
@@ -125,30 +445,16 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - app_bedelia
-      # - app_profesor
-      # - app_alumno
+      app_bedelia:
+        condition: service_healthy
     networks:
       - smartcampus_net
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-  # =========================
-  # Aplicaciones Flask
-  # =========================
-
-  # app_bedelia:
-  #   build: ./apps/bedelia
-  #   container_name: app_bedelia
-  #   environment:
-  #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
-  #     REDIS_HOST: redis
-  #     EMQX_HOST: emqx
-  #   depends_on:
-  #     - mongo-primary
-  #     - redis
-  #     - emqx
-  #   networks:
-  #     - smartcampus_net
-  
   # =========================
   # BEDELIA
   # =========================
@@ -158,14 +464,16 @@ services:
       context: ./apps/bedelia
     container_name: app_bedelia
     depends_on:
-      - mongo-primary
-      - mongo-secondary1
-      - mongo-secondary2
-      - mongo-init
-      - redis
-      - emqx
+      certs-generator:
+        condition: service_completed_successfully
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
     environment:
-      APP_NAME: App_bedelia 
+      APP_NAME: App_Bedelia 
       DEBUG: "true"
       MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
       MONGO_DB_NAME: smartcampus
@@ -177,43 +485,49 @@ services:
       - ./infra/certs:/opt/certs:ro
     ports:
       - "5000:5000"
+    networks:
+      - smartcampus_net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
   # =========================
-  # PROFESOR
+  # PROFESOR (Placeholder)
   # =========================
 
   # app_profesor:
   #   build: ./apps/profesor
   #   container_name: app_profesor
-  #   environment:
-  #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
-  #     REDIS_HOST: redis
-  #     EMQX_HOST: emqx
   #   depends_on:
-  #     - mongo-primary
-  #     - redis
-  #     - emqx
+  #     mongo-init:
+  #       condition: service_completed_successfully
+  #     redis:
+  #       condition: service_healthy
+  #     emqx:
+  #       condition: service_healthy
   #   networks:
   #     - smartcampus_net
 
   # =========================
-  # ALUMNO
+  # ALUMNO (Placeholder)
   # =========================
 
   # app_alumno:
   #   build: ./apps/alumno
   #   container_name: app_alumno
-  #   environment:
-  #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
-  #     REDIS_HOST: redis
-  #     EMQX_HOST: emqx
   #   depends_on:
-  #     - mongo-primary
-  #     - redis
-  #     - emqx
+  #     mongo-init:
+  #       condition: service_completed_successfully
+  #     redis:
+  #       condition: service_healthy
+  #     emqx:
+  #       condition: service_healthy
   #   networks:
-  #   - smartcampus_net
+  #     - smartcampus_net
 
   # =========================
   # Observabilidad – Prometheus
@@ -228,24 +542,10 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
     ports:
       - "9090:9090"
-
-  #  prometheus:
-  #   image: prom/prometheus:v2.52.0
-  #   container_name: prometheus
-  #   ports:
-  #   - "9090:9090"
-  #   volumes:
-  #   - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-  #   networks:
-  #   - smartcampus_net
-  #   mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
-  #   MONGO_DB_NAME: smartcampus
-  #   REDIS_HOST: redis
-  #   REDIS_PORT: 6379
-  #   MQTT_BROKER_HOST: emqx
-  #   MQTT_BROKER_PORT: 8883
-  #   volumes:
-  #   - ./infra/certs:/opt/certs:ro
-  #   ports:
-  #   - "5000:5000"
-  #   restart: unless-stopped   
+    networks:
+      - smartcampus_net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

@@ -3,11 +3,14 @@
 # =============================
 
 from flask import Flask, jsonify, request
+from datetime import datetime
 from config import APP_NAME, DEBUG
-from db.mongo import mongo_db
 from db.redis import redis_client
 from mqtt_client import mqtt_client
-from datetime import datetime
+#from db.mongo import mongo_db
+from db.mongo import get_mongo_db
+
+mongo_db = get_mongo_db()
 
 app = Flask(__name__)
 app.config["DEBUG"] = DEBUG

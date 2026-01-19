@@ -1,0 +1,14 @@
+# =============================
+# Dockerfile para Inicializar MongoDB Replica Set
+# =============================
+
+FROM mongo:6.0
+
+# Copiar script de inicialización
+COPY mongo-init-replica.sh /scripts/init-replica.sh
+
+# Hacer ejecutable dentro de la imagen
+RUN chmod +x /scripts/init-replica.sh
+
+# El script se ejecutará desde docker-compose
+ENTRYPOINT ["/scripts/init-replica.sh"]

@@ -1,0 +1,20 @@
+# =============================
+# Dockerfile para Generar Certificados TLS
+# =============================
+
+FROM alpine:3.18
+
+# Instalar OpenSSL
+RUN apk add --no-cache openssl bash
+
+# Directorio de trabajo
+WORKDIR /certs
+
+# Copiar script de generación
+COPY generate-certs.sh /scripts/generate-certs.sh
+
+# Hacer ejecutable (esto funciona en la imagen Docker)
+RUN chmod +x /scripts/generate-certs.sh
+
+# El comando se ejecutará desde docker-compose
+ENTRYPOINT ["/scripts/generate-certs.sh"]

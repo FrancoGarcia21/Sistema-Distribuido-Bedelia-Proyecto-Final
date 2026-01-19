@@ -3,14 +3,16 @@
 
 
 import redis 
-from config import (
+from redis.exceptions import RedisError
+from ..config import (
         REDIS_HOST,
         REDIS_PORT,
         REDIS_DB,
         REDIS_TTL_AULA_CACHE,
         REDIS_TTL_SESION,
         REDIS_TTL_LOCK,
-)
+    )
+
 
 
 class RedisClient:
@@ -30,7 +32,7 @@ class RedisClient:
             )
         # Validación de conexión
             self.client.ping()
-        except redis.RedisError as e:
+        except RedisError as e:
             raise RuntimeError(f"No se pudo conectar a Redis: {e}")
 
 
@@ -90,9 +92,6 @@ class RedisClient:
     def release_lock(self, lock_key):
         """ libera el lock """
         self.client.delete(f"lock:{lock_key}")
-
-
-
 
     # Instancia singleton
 redis_client = RedisClient()
