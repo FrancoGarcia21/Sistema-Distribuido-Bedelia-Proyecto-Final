@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================
-# Generación de Certificados TLS Autofirmados
-# Para EMQX y clientes MQTT
+# Generación de Certificados TLS (CA + EMQX server + clients por app)
+# mTLS: EMQX valida clientes firmados por CA
 # =============================
 
 set -e
@@ -9,110 +9,113 @@ set -e
 CERTS_DIR="/certs"
 DAYS_VALID=365
 
-echo "🔐 Generando certificados TLS autofirmados..."
+# Apps (clientes) que tendrán su propio certificado
+APPS=("bedelia" "profesor" "alumno")
 
-# Verificar si ya existen los certificados
-if [ -f "$CERTS_DIR/server.crt" ] && [ -f "$CERTS_DIR/server.key" ]; then
-  echo "✅ Los certificados ya existen. Saltando generación."
-  echo "   Para regenerar, elimina los archivos en ./infra/certs/"
-  exit 0
-fi
+echo "🔐 Generando certificados TLS (CA + server + clients)..."
 
-# Crear directorio si no existe
 mkdir -p "$CERTS_DIR"
 
-# -----------------------------
-# 1. Generar CA (Certificate Authority)
-# -----------------------------
-echo "📜 Generando CA (Certificate Authority)..."
+# Si ya existe CA y server, evitamos regenerar (idempotente)
+if [ -f "$CERTS_DIR/ca.crt" ] && [ -f "$CERTS_DIR/ca.key" ] && [ -f "$CERTS_DIR/server.crt" ] && [ -f "$CERTS_DIR/server.key" ]; then
+  echo "✅ CA y certificado de servidor ya existen."
+else
+  echo "📜 1) Generando CA (Certificate Authority)..."
+  openssl req -new -x509 \
+    -days "$DAYS_VALID" \
+    -keyout "$CERTS_DIR/ca.key" \
+    -out "$CERTS_DIR/ca.crt" \
+    -nodes \
+    -subj "/C=AR/ST=Chubut/L=Comodoro Rivadavia/O=SmartCampus/OU=IT/CN=SmartCampus-CA"
 
-openssl req -new -x509 \
-  -days $DAYS_VALID \
-  -keyout "$CERTS_DIR/ca.key" \
-  -out "$CERTS_DIR/ca.crt" \
-  -nodes \
-  -subj "/C=AR/ST=Chubut/L=Comodoro Rivadavia/O=SmartCampus/OU=IT/CN=SmartCampus-CA"
+  echo "🔑 2) Generando clave privada del servidor (EMQX)..."
+  openssl genrsa -out "$CERTS_DIR/server.key" 2048
 
-# -----------------------------
-# 2. Generar clave privada del servidor
-# -----------------------------
-echo "🔑 Generando clave privada del servidor..."
+  echo "🧾 3) Generando CSR del servidor..."
+  openssl req -new \
+    -key "$CERTS_DIR/server.key" \
+    -out "$CERTS_DIR/server.csr" \
+    -subj "/C=AR/ST=Chubut/L=Comodoro Rivadavia/O=SmartCampus/OU=EMQX/CN=emqx"
 
-openssl genrsa -out "$CERTS_DIR/server.key" 2048
+  # Extensiones para servidor: SAN + serverAuth
+  cat > "$CERTS_DIR/server.ext" <<EOF
+basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=DNS:emqx,DNS:localhost,IP:127.0.0.1
+EOF
 
-# -----------------------------
-# 3. Generar CSR (Certificate Signing Request)
-# -----------------------------
-echo "📝 Generando CSR del servidor..."
+  echo "✍️  4) Firmando certificado del servidor con la CA..."
+  openssl x509 -req \
+    -in "$CERTS_DIR/server.csr" \
+    -CA "$CERTS_DIR/ca.crt" \
+    -CAkey "$CERTS_DIR/ca.key" \
+    -CAcreateserial \
+    -out "$CERTS_DIR/server.crt" \
+    -days "$DAYS_VALID" \
+    -extfile "$CERTS_DIR/server.ext"
+fi
 
-openssl req -new \
-  -key "$CERTS_DIR/server.key" \
-  -out "$CERTS_DIR/server.csr" \
-  -subj "/C=AR/ST=Chubut/L=Comodoro Rivadavia/O=SmartCampus/OU=EMQX/CN=emqx"
+# Función: generar certificado de cliente para una app
+generate_client_cert () {
+  local app_name="$1"
+  local key="$CERTS_DIR/${app_name}.key"
+  local csr="$CERTS_DIR/${app_name}.csr"
+  local crt="$CERTS_DIR/${app_name}.crt"
+  local ext="$CERTS_DIR/${app_name}.ext"
 
-# -----------------------------
-# 4. Firmar certificado del servidor con CA
-# -----------------------------
-echo "✍️  Firmando certificado del servidor..."
+  if [ -f "$crt" ] && [ -f "$key" ]; then
+    echo "✅ Cert cliente ya existe para: $app_name (saltando)"
+    return 0
+  fi
 
-openssl x509 -req \
-  -in "$CERTS_DIR/server.csr" \
-  -CA "$CERTS_DIR/ca.crt" \
-  -CAkey "$CERTS_DIR/ca.key" \
-  -CAcreateserial \
-  -out "$CERTS_DIR/server.crt" \
-  -days $DAYS_VALID
+  echo "👤 5) Generando certificado de cliente para: $app_name"
 
-# -----------------------------
-# 5. Generar certificado cliente (para apps Python)
-# -----------------------------
-echo "👤 Generando certificado de cliente..."
+  openssl genrsa -out "$key" 2048
 
-openssl genrsa -out "$CERTS_DIR/client.key" 2048
+  # CN identifica la app, pero EMQX no lo va a filtrar: solo valida CA
+  openssl req -new \
+    -key "$key" \
+    -out "$csr" \
+    -subj "/C=AR/ST=Chubut/L=Comodoro Rivadavia/O=SmartCampus/OU=Apps/CN=${app_name}"
 
-openssl req -new \
-  -key "$CERTS_DIR/client.key" \
-  -out "$CERTS_DIR/client.csr" \
-  -subj "/C=AR/ST=Chubut/L=Comodoro Rivadavia/O=SmartCampus/OU=Apps/CN=flask-client"
+  # Extensiones para cliente: clientAuth
+  cat > "$ext" <<EOF
+basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=clientAuth
+EOF
 
-openssl x509 -req \
-  -in "$CERTS_DIR/client.csr" \
-  -CA "$CERTS_DIR/ca.crt" \
-  -CAkey "$CERTS_DIR/ca.key" \
-  -CAcreateserial \
-  -out "$CERTS_DIR/client.crt" \
-  -days $DAYS_VALID
+  openssl x509 -req \
+    -in "$csr" \
+    -CA "$CERTS_DIR/ca.crt" \
+    -CAkey "$CERTS_DIR/ca.key" \
+    -CAcreateserial \
+    -out "$crt" \
+    -days "$DAYS_VALID" \
+    -extfile "$ext"
+}
 
-# -----------------------------
-# 6. Limpiar archivos temporales
-# -----------------------------
-echo "🧹 Limpiando archivos temporales..."
+# Generar certs por app
+for app in "${APPS[@]}"; do
+  generate_client_cert "$app"
+done
 
-rm -f "$CERTS_DIR"/*.csr
-rm -f "$CERTS_DIR"/*.srl
+echo "🧹 6) Limpiando archivos temporales..."
+rm -f "$CERTS_DIR"/*.csr "$CERTS_DIR"/*.srl "$CERTS_DIR"/*.ext || true
 
-# -----------------------------
-# 7. Ajustar permisos
-# -----------------------------
-echo "🔒 Ajustando permisos..."
-
+echo "🔒 7) Ajustando permisos..."
 chmod 644 "$CERTS_DIR"/*.crt
 chmod 600 "$CERTS_DIR"/*.key
 
-# -----------------------------
-# Resumen
-# -----------------------------
 echo ""
-echo "✅ Certificados generados exitosamente en: $CERTS_DIR"
+echo "✅ Certificados listos en: $CERTS_DIR"
 echo ""
-echo "Archivos creados:"
-echo "  📁 ca.crt       - Certificado de la CA"
-echo "  📁 ca.key       - Clave privada de la CA"
-echo "  📁 server.crt   - Certificado del servidor (EMQX)"
-echo "  📁 server.key   - Clave privada del servidor"
-echo "  📁 client.crt   - Certificado del cliente (Apps Flask)"
-echo "  📁 client.key   - Clave privada del cliente"
-echo ""
-echo "⚠️  IMPORTANTE: Estos son certificados autofirmados."
-echo "   Configura tls_insecure_set(True) en clientes MQTT."
+echo "Archivos principales:"
+echo "  - ca.crt / ca.key"
+echo "  - server.crt / server.key (EMQX)"
+echo "Clientes por app:"
+for app in "${APPS[@]}"; do
+  echo "  - ${app}.crt / ${app}.key"
+done
 echo ""

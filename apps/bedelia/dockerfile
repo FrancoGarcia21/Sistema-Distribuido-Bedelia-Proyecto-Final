@@ -1,6 +1,4 @@
-# =============================
-# App_Bedelia – Dockerfile
-# =============================
+
 
 FROM python:3.11-slim
 
@@ -10,11 +8,12 @@ ENV PYTHONUNBUFFERED=1
 # Directorio de trabajo
 WORKDIR /app
 
-# Dependencias del sistema (mínimas)
+# Dependencias del sistema:
+# - gcc/libffi-dev: para compilar dependencias (si aplica)
+# - curl: necesario para healthcheck del docker-compose
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libffi-dev \
+    && apt-get install -y --no-install-recommends gcc libffi-dev curl \
     && rm -rf /var/lib/apt/lists/*
-    
 
 # Copiar dependencias
 COPY requirements.txt .

@@ -92,6 +92,6 @@ class RedisClient:
     def release_lock(self, lock_key):
         """ libera el lock """
         self.client.delete(f"lock:{lock_key}")
-
     # Instancia singleton
+    
 redis_client = RedisClient()
