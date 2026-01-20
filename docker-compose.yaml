@@ -14,7 +14,7 @@ volumes:
 
 services:
   # =========================
-  # Generación de Certificados TLS (CA + server + client)
+  # Generación de Certificados TLS (CA + server + clientes por app)
   # =========================
   certs-generator:
     build:
@@ -138,7 +138,7 @@ services:
       start_period: 10s
 
   # =========================
-  # EMQX Broker MQTT (mTLS: verify_peer + CA)
+  # EMQX Broker MQTT (mTLS: verify_peer + fail_if_no_peer_cert)
   # =========================
   emqx:
     image: emqx/emqx:5.5
@@ -147,11 +147,11 @@ services:
       certs-generator:
         condition: service_completed_successfully
     ports:
-      - "1883:1883"
-      - "8883:8883"
-      - "8083:8083"
-      - "8084:8084"
-      - "18083:18083"
+      - "1883:1883"   # TCP sin TLS (opcional, puedes cerrarlo)
+      - "8883:8883"   # TLS/mTLS
+      - "8083:8083"   # WebSocket
+      - "8084:8084"   # WebSocket TLS
+      - "18083:18083" # Dashboard
     environment:
       EMQX_NAME: emqx
       EMQX_HOST: emqx
@@ -162,13 +162,13 @@ services:
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
       EMQX_DASHBOARD__DEFAULT_PASSWORD: admin
 
-      # Listener SSL
+      # Listener SSL en puerto 8883
       EMQX_LISTENERS__SSL__DEFAULT__BIND: "0.0.0.0:8883"
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CACERTFILE: /opt/emqx/etc/certs/ca.crt
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE: /opt/emqx/etc/certs/server.crt
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: /opt/emqx/etc/certs/server.key
 
-      # mTLS (cliente obligatorio y validado por CA)
+      # CORREGIDO: mTLS obligatorio (valida clientes firmados por CA)
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: verify_peer
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__FAIL_IF_NO_PEER_CERT: "true"
 
@@ -205,16 +205,19 @@ services:
       APP_NAME: App_Bedelia
       DEBUG: "true"
 
+      # MongoDB
       MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
       MONGO_DB_NAME: smartcampus
 
+      # Redis
       REDIS_HOST: redis
       REDIS_PORT: "6379"
 
+      # MQTT/EMQX
       MQTT_BROKER_HOST: emqx
       MQTT_BROKER_PORT: "8883"
 
-      # mTLS: usar certificado de CLIENTE (no server.*)
+      # CORREGIDO: mTLS con certificado específico de bedelia
       MQTT_TLS_ENABLED: "true"
       MQTT_TLS_CA_CERT: "/opt/certs/ca.crt"
       MQTT_TLS_CERT: "/opt/certs/bedelia.crt"
@@ -274,3 +277,63 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  # =========================
+  # PROFESOR (Placeholder - futuro)
+  # =========================
+  # app_profesor:
+  #   build: ./apps/profesor
+  #   container_name: app_profesor
+  #   depends_on:
+  #     certs-generator:
+  #       condition: service_completed_successfully
+  #     mongo-init:
+  #       condition: service_completed_successfully
+  #     redis:
+  #       condition: service_healthy
+  #     emqx:
+  #       condition: service_healthy
+  #   environment:
+  #     APP_NAME: App_Profesor
+  #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+  #     REDIS_HOST: redis
+  #     MQTT_BROKER_HOST: emqx
+  #     MQTT_BROKER_PORT: "8883"
+  #     MQTT_TLS_ENABLED: "true"
+  #     MQTT_TLS_CA_CERT: "/opt/certs/ca.crt"
+  #     MQTT_TLS_CERT: "/opt/certs/profesor.crt"
+  #     MQTT_TLS_KEY: "/opt/certs/profesor.key"
+  #   volumes:
+  #     - ./infra/certs:/opt/certs:ro
+  #   networks:
+  #     - smartcampus_net
+
+  # =========================
+  # ALUMNO (Placeholder - futuro)
+  # =========================
+  # app_alumno:
+  #   build: ./apps/alumno
+  #   container_name: app_alumno
+  #   depends_on:
+  #     certs-generator:
+  #       condition: service_completed_successfully
+  #     mongo-init:
+  #       condition: service_completed_successfully
+  #     redis:
+  #       condition: service_healthy
+  #     emqx:
+  #       condition: service_healthy
+  #   environment:
+  #     APP_NAME: App_Alumno
+  #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+  #     REDIS_HOST: redis
+  #     MQTT_BROKER_HOST: emqx
+  #     MQTT_BROKER_PORT: "8883"
+  #     MQTT_TLS_ENABLED: "true"
+  #     MQTT_TLS_CA_CERT: "/opt/certs/ca.crt"
+  #     MQTT_TLS_CERT: "/opt/certs/alumno.crt"
+  #     MQTT_TLS_KEY: "/opt/certs/alumno.key"
+  #   volumes:
+  #     - ./infra/certs:/opt/certs:ro
+  #   networks:
+  #     - smartcampus_net
