@@ -19,7 +19,7 @@ services:
   certs-generator:
     build:
       context: .
-      dockerfile: Dockerfile.certs
+      dockerfile: dockerfile.certs
     container_name: certs-generator
     volumes:
       - ./infra/certs:/certs
@@ -90,7 +90,7 @@ services:
   mongo-init:
     build:
       context: .
-      dockerfile: Dockerfile.mongo-init
+      dockerfile: dockerfile.mongo-init
     container_name: mongo-init
     depends_on:
       mongo-primary:
@@ -191,6 +191,7 @@ services:
   app_bedelia:
     build:
       context: ./apps/bedelia
+      dockerfile: dockerfile 
     container_name: app_bedelia
     depends_on:
       certs-generator:
