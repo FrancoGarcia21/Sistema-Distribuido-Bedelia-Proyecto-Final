@@ -1,13 +1,13 @@
-# #!/bin/bash
+#!/bin/bash
 # set -e
 
-# echo "⏳ Esperando a que MongoDB esté disponible..."
+# echo "Ã¢ÂÂ³ Esperando a que MongoDB estÃƒÂ© disponible..."
 
 # until mongosh --host mongo-primary --eval "db.adminCommand('ping')" >/dev/null 2>&1; do
 #   sleep 2
 # done
 
-# echo "🚀 Inicializando Replica Set rs0..."
+# echo "Ã°Å¸Å¡â‚¬ Inicializando Replica Set rs0..."
 
 # mongosh --host mongo-primary <<EOF
 # var status = rs.status();
@@ -25,7 +25,7 @@
 # }
 # EOF
 
-# echo "✅ Replica Set configurado correctamente."
+# echo "Ã¢Å“â€¦ Replica Set configurado correctamente."
 
 #!/bin/bash
 # =============================
@@ -38,10 +38,10 @@ set -e
 MAX_RETRIES=30
 RETRY_INTERVAL=2
 
-echo "⏳ Esperando a que todos los nodos MongoDB estén disponibles..."
+echo "Ã¢ÂÂ³ Esperando a que todos los nodos MongoDB estÃƒÂ©n disponibles..."
 
 # -----------------------------
-# Función para verificar disponibilidad de un nodo
+# FunciÃƒÂ³n para verificar disponibilidad de un nodo
 # -----------------------------
 wait_for_mongo() {
   local host=$1
@@ -51,16 +51,16 @@ wait_for_mongo() {
   
   while [ $retries -lt $MAX_RETRIES ]; do
     if mongosh --host "$host" --eval "db.adminCommand('ping')" >/dev/null 2>&1; then
-      echo "  ✅ $host está disponible"
+      echo "  Ã¢Å“â€¦ $host estÃƒÂ¡ disponible"
       return 0
     fi
     
     retries=$((retries + 1))
-    echo "  ⏳ Intento $retries/$MAX_RETRIES para $host..."
+    echo "  Ã¢ÂÂ³ Intento $retries/$MAX_RETRIES para $host..."
     sleep $RETRY_INTERVAL
   done
   
-  echo "  ❌ Error: $host no respondió después de $MAX_RETRIES intentos"
+  echo "  Ã¢ÂÅ’ Error: $host no respondiÃƒÂ³ despuÃƒÂ©s de $MAX_RETRIES intentos"
   return 1
 }
 
@@ -72,7 +72,7 @@ wait_for_mongo "mongo-secondary1:27017" || exit 1
 wait_for_mongo "mongo-secondary2:27017" || exit 1
 
 echo ""
-echo "🚀 Todos los nodos están disponibles. Inicializando Replica Set..."
+echo "Ã°Å¸Å¡â‚¬ Todos los nodos estÃƒÂ¡n disponibles. Inicializando Replica Set..."
 echo ""
 
 # -----------------------------
@@ -80,7 +80,7 @@ echo ""
 # -----------------------------
 mongosh --host mongo-primary:27017 <<EOF
 
-// Verificar si ya está inicializado
+// Verificar si ya estÃƒÂ¡ inicializado
 var status = null;
 try {
   status = rs.status();
@@ -89,11 +89,11 @@ try {
 }
 
 if (status && status.ok === 1) {
-  print("✅ Replica Set ya está inicializado");
+  print("Ã¢Å“â€¦ Replica Set ya estÃƒÂ¡ inicializado");
   print("Estado actual:");
   printjson(status);
 } else {
-  print("📝 Inicializando Replica Set 'rs0'...");
+  print("Ã°Å¸â€œÂ Inicializando Replica Set 'rs0'...");
   
   var config = {
     _id: "rs0",
@@ -120,9 +120,9 @@ if (status && status.ok === 1) {
   printjson(result);
   
   if (result.ok === 1) {
-    print("✅ Replica Set inicializado correctamente");
+    print("Ã¢Å“â€¦ Replica Set inicializado correctamente");
   } else {
-    print("❌ Error al inicializar Replica Set");
+    print("Ã¢ÂÅ’ Error al inicializar Replica Set");
     quit(1);
   }
 }
@@ -133,11 +133,11 @@ EOF
 # Verificar estado final
 # -----------------------------
 echo ""
-echo "🔍 Verificando estado del Replica Set..."
+echo "Ã°Å¸â€Â Verificando estado del Replica Set..."
 sleep 5
 
 mongosh --host mongo-primary:27017 --eval "rs.status()" --quiet
 
 echo ""
-echo "✅ MongoDB Replica Set 'rs0' configurado y operativo"
+echo "Ã¢Å“â€¦ MongoDB Replica Set 'rs0' configurado y operativo"
 echo ""

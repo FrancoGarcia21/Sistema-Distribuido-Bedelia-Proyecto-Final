@@ -156,6 +156,7 @@ services:
       EMQX_NAME: emqx
       EMQX_HOST: emqx
       EMQX_NODE_NAME: emqx@emqx
+      EMQX_LISTENERS__WSS__DEFAULT__ENABLE: "false"
 
       # Dashboard
       EMQX_ALLOW_ANONYMOUS: "false"
