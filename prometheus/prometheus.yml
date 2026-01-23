@@ -1,0 +1,68 @@
+
+# =============================
+# Prometheus Config para SmartCampus
+# =============================
+
+# global:
+#   scrape_interval: 15s
+#   evaluation_interval: 15s
+#   external_labels:
+#     cluster: 'smartcampus'
+#     environment: 'development'
+
+# # Scrape configs
+# scrape_configs:
+#   # Prometheus a sí mismo
+#   - job_name: 'prometheus'
+#     static_configs:
+#       - targets: ['localhost:9090']
+
+#   # Flask apps (si expones /metrics con prometheus_client)
+#   - job_name: 'bedelia'
+#     static_configs:
+#       - targets: ['app_bedelia:5000']
+#     metrics_path: '/metrics'
+#     # Opcional: solo si implementas endpoint /metrics
+#     # Si no existe aún, comenta esta sección
+
+#   # EMQX metrics (puerto 18083 dashboard tiene métricas)
+#   - job_name: 'emqx'
+#     static_configs:
+#       - targets: ['emqx:18083']
+#     metrics_path: '/api/v5/prometheus/stats'
+#     # Nota: EMQX 5.x expone métricas en este path
+#     # Requiere autenticación (user: admin, pass: admin)
+#     basic_auth:
+#       username: 'admin'
+#       password: 'admin'
+
+#   # MongoDB (requiere mongodb_exporter - opcional, no incluido aún)
+#   # - job_name: 'mongodb'
+#   #   static_configs:
+#   #     - targets: ['mongodb-exporter:9216']
+
+#   # Redis (requiere redis_exporter - opcional, no incluido aún)
+#   # - job_name: 'redis'
+#   #   static_configs:
+#   #     - targets: ['redis-exporter:9121']
+
+#   # Nginx (requiere nginx-prometheus-exporter - opcional)
+#   # - job_name: 'nginx'
+#   #   static_configs:
+#   #     - targets: ['nginx-exporter:9113']
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "emqx"
+    static_configs:
+      - targets: ["emqx:18083"]
+    metrics_path: "/api/v5/prometheus/stats"
+    basic_auth:
+      username: "admin"
+      password: "admin"

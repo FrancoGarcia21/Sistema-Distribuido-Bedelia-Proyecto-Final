@@ -1,0 +1,258 @@
+version: "3.9"
+
+networks:
+  smartcampus_net:
+    driver: bridge
+
+volumes:
+  mongo_primary_data:
+  mongo_secondary1_data:
+  mongo_secondary2_data:
+  redis_data:
+  emqx_data:
+  emqx_log:
+
+services:
+  # =========================
+  # Certificados TLS
+  # =========================
+  certs-generator:
+    build:
+      context: .
+      dockerfile: dockerfile.certs
+    container_name: certs-generator
+    volumes:
+      - ./infra/certs:/certs
+    restart: "no"
+    networks:
+      - smartcampus_net
+
+  # =========================
+  # MongoDB Replica Set
+  # =========================
+  mongo-primary:
+    image: mongo:6.0
+    container_name: mongo-primary
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_primary_data:/data/db
+    networks:
+      - smartcampus_net
+    healthcheck:
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mongo-secondary1:
+    image: mongo:6.0
+    container_name: mongo-secondary1
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_secondary1_data:/data/db
+    networks:
+      - smartcampus_net
+    healthcheck:
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mongo-secondary2:
+    image: mongo:6.0
+    container_name: mongo-secondary2
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo_secondary2_data:/data/db
+    networks:
+      - smartcampus_net
+    healthcheck:
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mongo-init:
+    build:
+      context: .
+      dockerfile: dockerfile.mongo-init
+    container_name: mongo-init
+    depends_on:
+      mongo-primary:
+        condition: service_healthy
+      mongo-secondary1:
+        condition: service_healthy
+      mongo-secondary2:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - smartcampus_net
+
+  # =========================
+  # Redis
+  # =========================
+  redis:
+    image: redis:7.2
+    container_name: redis
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - smartcampus_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # =========================
+  # EMQX (mTLS FUNCIONAL)
+  # =========================
+  emqx:
+    image: emqx/emqx:5.5
+    container_name: emqx
+    hostname: emqx
+    user: "0:0"   # CLAVE en Windows (permisos de server.key)
+    depends_on:
+      certs-generator:
+        condition: service_completed_successfully
+    ports:
+      - "1883:1883"
+      - "8883:8883"
+      - "8083:8083"
+      - "18083:18083"
+    environment:
+      EMQX_NODE__NAME: emqx@emqx
+      EMQX_NODE__COOKIE: "cookie_super_larga_random_123456"
+
+      EMQX_LISTENERS__WSS__DEFAULT__ENABLE: "false"
+
+
+      EMQX_ALLOW_ANONYMOUS: "false"
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: admin
+
+      EMQX_LISTENERS__SSL__DEFAULT__BIND: "0.0.0.0:8883"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CACERTFILE: /opt/emqx/etc/certs/ca.crt
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE: /opt/emqx/etc/certs/server.crt
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: /opt/emqx/etc/certs/server.key
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: verify_peer
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__FAIL_IF_NO_PEER_CERT: "true"
+
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+      - ./infra/certs:/opt/emqx/etc/certs:ro
+    networks:
+      - smartcampus_net
+    healthcheck:
+      test: ["CMD-SHELL", "ps | grep -q '[b]eam.smp'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # =========================
+  # BEDELIA
+  # =========================
+  app_bedelia:
+    build:
+      context: ./apps/bedelia
+      dockerfile: dockerfile
+    container_name: app_bedelia
+    command: ["python", "app.py"]
+    depends_on:
+      certs-generator:
+        condition: service_completed_successfully
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
+    environment:
+      APP_NAME: App_Bedelia
+      DEBUG: "true"
+
+      MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+      MONGO_DB_NAME: smartcampus
+
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+
+      MQTT_BROKER_HOST: emqx
+      MQTT_BROKER_PORT: "8883"
+      MQTT_TLS_ENABLED: "true"
+      MQTT_TLS_CA_CERT: "/opt/certs/ca.crt"
+      MQTT_TLS_CERT: "/opt/certs/bedelia.crt"
+      MQTT_TLS_KEY: "/opt/certs/bedelia.key"
+
+    volumes:
+      - ./infra/certs:/opt/certs:ro
+    ports:
+      - "5000:5000"
+    networks:
+      - smartcampus_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  # =========================
+  # NGINX
+  # =========================
+  nginx:
+    image: nginx:1.25
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      app_bedelia:
+        condition: service_healthy
+    networks:
+      - smartcampus_net
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # =========================
+  # PROMETHEUS
+  # =========================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    networks:
+      - smartcampus_net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
