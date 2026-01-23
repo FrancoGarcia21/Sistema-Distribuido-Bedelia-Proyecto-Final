@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Panel de Gestión – Bedelía</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo">🏫</div>
+      <div>
+        <div class="title">Panel de Gestión</div>
+        <div class="subtitle">Administrador de Aulas</div>
+      </div>
+    </div>
+
+    <button class="btn btn-ghost" onclick="location.href='/health'">Health</button>
+  </header>
+
+  <main class="container">
+    <div class="toolbar">
+      <div class="filters">
+        <select id="filtro-piso" class="select">
+          <option value="">Todos los pisos</option>
+          <option value="1">Piso 1</option>
+          <option value="2">Piso 2</option>
+          <option value="3">Piso 3</option>
+          <option value="4">Piso 4</option>
+        </select>
+
+        <select id="filtro-estado" class="select">
+          <option value="">Todos los estados</option>
+          <option value="Libre">Libre</option>
+          <option value="Ocupada">Ocupada</option>
+          <option value="Deshabilitada">Deshabilitada</option>
+        </select>
+      </div>
+
+      <button class="btn btn-primary" id="btn-crear">+ Crear Aula</button>
+    </div>
+
+    <section class="grid" id="aulas-container"></section>
+  </main>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

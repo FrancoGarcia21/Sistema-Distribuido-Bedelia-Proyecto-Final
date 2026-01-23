@@ -2,7 +2,7 @@
 # App_Bedelia – Application Entry Point (CORREGIDO)
 # =============================
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from datetime import datetime
 import json
 
@@ -128,6 +128,12 @@ def listar_aulas():
         pass
 
     return jsonify({"source": "mongo", "data": aulas}), 200
+
+
+@app.route("/", methods=["GET"])
+def dashboard():
+    return render_template("dashboard.html")
+
 
 
 # -----------------------------
