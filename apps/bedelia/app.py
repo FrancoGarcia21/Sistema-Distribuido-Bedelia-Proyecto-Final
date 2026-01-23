@@ -8,7 +8,9 @@ import json
 
 from config import APP_NAME, DEBUG
 from db.redis import redis_client
-from mqtt_client import mqtt_client
+from mqtt_client import get_mqtt_client
+mqtt_client = get_mqtt_client()
+
 
 # Mantengo tu import actual para respetar que NO quieres tocar mongo.py aún
 from db.mongo import get_mongo_db
@@ -80,16 +82,17 @@ def crear_aula():
 
     # Publicar evento MQTT (NO quiero que una caída de EMQX tumbe el POST)
     try:
-        mqtt_client.publish(
-            topic="universidad/aulas/nueva",
-            payload={
-                "id_aula": aula_id,
-                "nro_aula": aula["nro_aula"],
-                "piso": aula["piso"],
-                "cupo": aula["cupo"],
-                "estado": aula["estado"],
-            }
-        )
+        if mqtt_client:
+            mqtt_client.publish(
+                topic="universidad/aulas/nueva",
+                payload={
+                    "id_aula": aula_id,
+                    "nro_aula": aula["nro_aula"],
+                    "piso": aula["piso"],
+                    "cupo": aula["cupo"],
+                    "estado": aula["estado"],
+                }
+            )
     except Exception as e:
         # Importante: devolvemos creado igual, pero avisamos que el evento no salió
         return jsonify({

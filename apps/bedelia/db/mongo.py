@@ -1,7 +1,7 @@
 import time
 from pymongo import MongoClient, ReadPreference
 from pymongo.errors import ServerSelectionTimeoutError, ConnectionFailure
-from ..config import MONGO_URI, MONGO_DB_NAME
+from config import MONGO_URI, MONGO_DB_NAME
 
 
 class MongoDB:

@@ -4,14 +4,15 @@
 
 import redis 
 from redis.exceptions import RedisError
-from ..config import (
-        REDIS_HOST,
-        REDIS_PORT,
-        REDIS_DB,
-        REDIS_TTL_AULA_CACHE,
-        REDIS_TTL_SESION,
-        REDIS_TTL_LOCK,
-    )
+from config import (
+    REDIS_HOST,
+    REDIS_PORT,
+    REDIS_DB,
+    REDIS_TTL_AULA_CACHE,
+    REDIS_TTL_SESION,
+    REDIS_TTL_LOCK,
+)
+
 
 
 

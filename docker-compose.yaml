@@ -14,7 +14,7 @@ volumes:
 
 services:
   # =========================
-  # Generación de Certificados TLS (CA + server + clientes por app)
+  # Certificados TLS
   # =========================
   certs-generator:
     build:
@@ -41,8 +41,7 @@ services:
     networks:
       - smartcampus_net
     healthcheck:
-      test: |
-        mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
@@ -59,8 +58,7 @@ services:
     networks:
       - smartcampus_net
     healthcheck:
-      test: |
-        mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
@@ -77,16 +75,12 @@ services:
     networks:
       - smartcampus_net
     healthcheck:
-      test: |
-        mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
 
-  # =========================
-  # MongoDB Replica Set Init
-  # =========================
   mongo-init:
     build:
       context: .
@@ -104,7 +98,7 @@ services:
       - smartcampus_net
 
   # =========================
-  # Redis con Persistencia (RDB + AOF)
+  # Redis
   # =========================
   redis:
     image: redis:7.2
@@ -113,17 +107,6 @@ services:
       - redis-server
       - --appendonly
       - "yes"
-      - --appendfsync
-      - everysec
-      - --save
-      - "60"
-      - "1"
-      - --save
-      - "300"
-      - "10"
-      - --save
-      - "900"
-      - "100"
     ports:
       - "6379:6379"
     volumes:
@@ -138,38 +121,36 @@ services:
       start_period: 10s
 
   # =========================
-  # EMQX Broker MQTT (mTLS: verify_peer + fail_if_no_peer_cert)
+  # EMQX (mTLS FUNCIONAL)
   # =========================
   emqx:
     image: emqx/emqx:5.5
     container_name: emqx
+    hostname: emqx
+    user: "0:0"   # CLAVE en Windows (permisos de server.key)
     depends_on:
       certs-generator:
         condition: service_completed_successfully
     ports:
-      - "1883:1883"   # TCP sin TLS (opcional, puedes cerrarlo)
-      - "8883:8883"   # TLS/mTLS
-      - "8083:8083"   # WebSocket
-      - "8084:8084"   # WebSocket TLS
-      - "18083:18083" # Dashboard
+      - "1883:1883"
+      - "8883:8883"
+      - "8083:8083"
+      - "18083:18083"
     environment:
-      EMQX_NAME: emqx
-      EMQX_HOST: emqx
-      EMQX_NODE_NAME: emqx@emqx
+      EMQX_NODE__NAME: emqx@emqx
+      EMQX_NODE__COOKIE: "cookie_super_larga_random_123456"
+
       EMQX_LISTENERS__WSS__DEFAULT__ENABLE: "false"
 
-      # Dashboard
+
       EMQX_ALLOW_ANONYMOUS: "false"
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
       EMQX_DASHBOARD__DEFAULT_PASSWORD: admin
 
-      # Listener SSL en puerto 8883
       EMQX_LISTENERS__SSL__DEFAULT__BIND: "0.0.0.0:8883"
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CACERTFILE: /opt/emqx/etc/certs/ca.crt
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE: /opt/emqx/etc/certs/server.crt
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: /opt/emqx/etc/certs/server.key
-
-      # CORREGIDO: mTLS obligatorio (valida clientes firmados por CA)
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: verify_peer
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__FAIL_IF_NO_PEER_CERT: "true"
 
@@ -180,11 +161,11 @@ services:
     networks:
       - smartcampus_net
     healthcheck:
-      test: ["CMD", "emqx", "ctl", "status"]
+      test: ["CMD-SHELL", "ps | grep -q '[b]eam.smp'"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 60s
 
   # =========================
   # BEDELIA
@@ -192,8 +173,9 @@ services:
   app_bedelia:
     build:
       context: ./apps/bedelia
-      dockerfile: dockerfile 
+      dockerfile: dockerfile
     container_name: app_bedelia
+    command: ["python", "app.py"]
     depends_on:
       certs-generator:
         condition: service_completed_successfully
@@ -207,19 +189,14 @@ services:
       APP_NAME: App_Bedelia
       DEBUG: "true"
 
-      # MongoDB
       MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
       MONGO_DB_NAME: smartcampus
 
-      # Redis
       REDIS_HOST: redis
       REDIS_PORT: "6379"
 
-      # MQTT/EMQX
       MQTT_BROKER_HOST: emqx
       MQTT_BROKER_PORT: "8883"
-
-      # CORREGIDO: mTLS con certificado específico de bedelia
       MQTT_TLS_ENABLED: "true"
       MQTT_TLS_CA_CERT: "/opt/certs/ca.crt"
       MQTT_TLS_CERT: "/opt/certs/bedelia.crt"
@@ -240,7 +217,7 @@ services:
       start_period: 40s
 
   # =========================
-  # Nginx Reverse Proxy
+  # NGINX
   # =========================
   nginx:
     image: nginx:1.25
@@ -261,7 +238,7 @@ services:
       retries: 3
 
   # =========================
-  # Observabilidad: Prometheus
+  # PROMETHEUS
   # =========================
   prometheus:
     image: prom/prometheus:latest
@@ -279,63 +256,3 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-
-  # =========================
-  # PROFESOR (Placeholder - futuro)
-  # =========================
-  # app_profesor:
-  #   build: ./apps/profesor
-  #   container_name: app_profesor
-  #   depends_on:
-  #     certs-generator:
-  #       condition: service_completed_successfully
-  #     mongo-init:
-  #       condition: service_completed_successfully
-  #     redis:
-  #       condition: service_healthy
-  #     emqx:
-  #       condition: service_healthy
-  #   environment:
-  #     APP_NAME: App_Profesor
-  #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
-  #     REDIS_HOST: redis
-  #     MQTT_BROKER_HOST: emqx
-  #     MQTT_BROKER_PORT: "8883"
-  #     MQTT_TLS_ENABLED: "true"
-  #     MQTT_TLS_CA_CERT: "/opt/certs/ca.crt"
-  #     MQTT_TLS_CERT: "/opt/certs/profesor.crt"
-  #     MQTT_TLS_KEY: "/opt/certs/profesor.key"
-  #   volumes:
-  #     - ./infra/certs:/opt/certs:ro
-  #   networks:
-  #     - smartcampus_net
-
-  # =========================
-  # ALUMNO (Placeholder - futuro)
-  # =========================
-  # app_alumno:
-  #   build: ./apps/alumno
-  #   container_name: app_alumno
-  #   depends_on:
-  #     certs-generator:
-  #       condition: service_completed_successfully
-  #     mongo-init:
-  #       condition: service_completed_successfully
-  #     redis:
-  #       condition: service_healthy
-  #     emqx:
-  #       condition: service_healthy
-  #   environment:
-  #     APP_NAME: App_Alumno
-  #     MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
-  #     REDIS_HOST: redis
-  #     MQTT_BROKER_HOST: emqx
-  #     MQTT_BROKER_PORT: "8883"
-  #     MQTT_TLS_ENABLED: "true"
-  #     MQTT_TLS_CA_CERT: "/opt/certs/ca.crt"
-  #     MQTT_TLS_CERT: "/opt/certs/alumno.crt"
-  #     MQTT_TLS_KEY: "/opt/certs/alumno.key"
-  #   volumes:
-  #     - ./infra/certs:/opt/certs:ro
-  #   networks:
-  #     - smartcampus_net
