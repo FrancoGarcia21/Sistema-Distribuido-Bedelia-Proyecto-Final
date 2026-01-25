@@ -53,7 +53,7 @@ MQTT_TLS_KEY = os.getenv("MQTT_TLS_KEY", "/opt/certs/bedelia.key")
 # Seguridad
 # -----------------------------
 # Usado para sesiones Flask (más adelante)
-SECRET_KEY = os.getenv("SECRET_KEY", "bedelia_secret_key_change_in_production")
+SECRET_KEY = os.getenv("SECRET_KEY", "bedelia_secret_key_change_in_production") ##### CAMBIAR ESTO EN PRODUCCIÓN #####
 
 # -----------------------------
 # Validación básica
