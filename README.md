@@ -2,7 +2,7 @@ comandos para ir probando la aplicacion de a poco:
 docker-compose down -v
 
 # Limpiar certificados antiguos (si quieres regenerarlos)
-rm -rf infra/certs/*
+Remove-Item -Path "infra/certs/*" -Recurse -Force
 
 # Limpiar imágenes huérfanas (opcional)
 docker system prune -f
@@ -12,6 +12,7 @@ docker-compose build --no-cache
 
 # Generar certificados SSL
 docker-compose up certs-generator
+
 # comando para verifiar que los certificados se hayan generado correctamente en la carpeta infra/certs/
 ls infra/certs/
 
@@ -86,7 +87,7 @@ docker-compose ps emqx
 Debe mostrar: healthy (tarda ~30 segundos en estar healthy)
 
 # ver logs para confirmar
-docker-compose logs emqx | grep -i ssl
+docker-compose logs emqx | Select-String -Pattern "ssl"
 
 deberia ver : Listener ssl:default on 0.0.0.0:8883 started
 
@@ -117,7 +118,8 @@ docker-compose logs -f app_bedelia
  Si ves error de MQTT:
 
 Verificar que bedelia.crt y bedelia.key existen en infra/certs/
-Ver logs de EMQX: docker-compose logs emqx | tail -50
+Ver logs de EMQX: 
+    docker-compose logs emqx | Select-Object -Last 50
 
 # levantar nginx
 docker-compose up -d nginx
@@ -164,10 +166,11 @@ respuesta esperada:
 }
 
 # 3.2 Test 2: Crear un aula (POST) + verificar publicación MQTT
-curl -X POST http://localhost/aulas \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nro_aula": "A101",
+Invoke-RestMethod -Uri "http://localhost/aulas" `
+  -Method Post `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{
+    "nro_aula": "A102",
     "piso": 1,
     "descripcion": "Aula de prueba",
     "cupo": 30,
@@ -198,8 +201,11 @@ mosquitto_sub -h localhost -p 1883 -t "universidad/aulas/#" -v
 
 (Nota: puerto 1883 es sin TLS; para probar mTLS desde fuera del stack es más complejo)
 
-# 3.3 Test 3: Listar aulas (GET) + verificar cache Redis
-curl http://localhost/aulas
+# 3.3 Test 3: Listar aulas (GET) + verificar cache Redis (3 formas distintas)
+Invoke-RestMethod -Uri "http://localhost/aulas" -Method Get
+Invoke-WebRequest -Uri "http://localhost/aulas"
+Invoke-RestMethod -Uri "http://localhost/aulas" | Format-Table
+
 
 respuesta esperada:
 {
@@ -217,7 +223,8 @@ respuesta esperada:
 }
 
 # Segunda llamada (desde cache Redis - menos de 5 min)
-curl http://localhost/aulas
+Invoke-RestMethod -Uri "http://localhost/aulas"
+Invoke-WebRequest -Uri "http://localhost/aulas"
 
 respuesta esperada:
 {
@@ -240,13 +247,14 @@ TTL cercano a 300 segundos
 # Test 4: Verificar índice único en MongoDB
 Intenta crear un aula duplicada (mismo nro_aula y piso):
 
-curl -X POST http://localhost/aulas \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nro_aula": "A101",
+  Invoke-RestMethod -Uri "http://localhost/aulas" `
+  -Method Post `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{
+    "nro_aula": "A102",
     "piso": 1,
-    "descripcion": "Duplicada",
-    "cupo": 20,
+    "descripcion": "Aula de prueba",
+    "cupo": 30,
     "estado": "disponible"
   }'
 
@@ -254,7 +262,7 @@ curl -X POST http://localhost/aulas \
 
 Ver logs de Bedelia:
 
-        docker-compose logs app_bedelia | tail -20
+        docker-compose logs app_bedelia | Select-Object -Last 20
 
 Deberías ver algo como: E11000 duplicate key error
 
