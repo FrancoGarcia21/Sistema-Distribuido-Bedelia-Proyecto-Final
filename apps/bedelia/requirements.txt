@@ -22,3 +22,6 @@ bcrypt==4.1.2
 
 # Logging utils
 colorlog==6.8.2
+
+# JWT handling
+PyJWT==2.8.0

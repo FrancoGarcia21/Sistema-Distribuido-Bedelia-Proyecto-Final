@@ -163,13 +163,16 @@ class CronogramaModel:
         if not es_actualizacion:
             duracion = CronogramaModel.calcular_duracion(data["hora_inicio"], data["hora_fin"])
             dia_semana = data["fecha"].weekday()  # 0=Lunes, 6=Domingo
+            fecha_valor = data["fecha"]
+            if isinstance(fecha_valor, date) and not isinstance(fecha_valor, datetime):
+                fecha_valor = datetime.combine(fecha_valor, datetime.min.time())
             
             documento = {
                 "id_aula": data["id_aula"],
                 "id_materia": data["id_materia"],
                 "id_profesor": data["id_profesor"],
                 "id_carrera": data["id_carrera"].strip(),
-                "fecha": data["fecha"],
+                "fecha": fecha_valor,
                 "hora_inicio": data["hora_inicio"],
                 "hora_fin": data["hora_fin"],
                 "duracion_minutos": duracion,

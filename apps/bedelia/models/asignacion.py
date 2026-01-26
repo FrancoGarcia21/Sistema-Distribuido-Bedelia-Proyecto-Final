@@ -247,7 +247,7 @@ class AsignacionModel:
                 "id_profesor": data["id_profesor"],
                 "id_materia": data["id_materia"],
                 "carrera": data["carrera"].strip(),
-                "fecha_asignacion": data.get("fecha_asignacion", date.today()),
+                "fecha_asignacion": datetime.combine(date.today(), datetime.min.time()),
                 "activa": data.get("activa", True),
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow()

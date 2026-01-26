@@ -6,7 +6,6 @@ Según convención del prompt MAESTRO: universidad/{dominio}/{accion}/{identific
 import json
 from typing import Dict, Any, Optional
 from datetime import datetime
-from mqtt_client import mqtt_client
 
 
 class MQTTEventPublisher:
@@ -17,6 +16,14 @@ class MQTTEventPublisher:
     # Prefijo base para todos los topics
     BASE_TOPIC = "universidad"
     
+    @staticmethod
+    def _get_mqtt_client():
+        """
+        Importación lazy de mqtt_client para evitar imports circulares
+        """
+        from mqtt_client import mqtt_client
+        return mqtt_client
+
     @staticmethod
     def _publicar(topic: str, payload: Dict[str, Any], qos: int = 1) -> bool:
         """
@@ -37,10 +44,14 @@ class MQTTEventPublisher:
             # Convertir a JSON
             mensaje = json.dumps(payload, default=str)
             
-            # Publicar
-            resultado = mqtt_client.publish(topic, mensaje, qos)
+            # Obtener cliente MQTT
+            # from mqtt_client import get_mqtt_client
+            mqtt_client = MQTTEventPublisher._get_mqtt_client()
             
-            return resultado
+            # Publicar
+            mqtt_client.publish(topic, mensaje, qos)
+            
+            return True
         except Exception as e:
             print(f"❌ Error al publicar en MQTT: {e}")
             return False
