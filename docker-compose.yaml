@@ -123,11 +123,54 @@ services:
   # =========================
   # EMQX (mTLS FUNCIONAL)
   # =========================
+  # emqx:
+  #   image: emqx/emqx:5.5
+  #   container_name: emqx
+  #   hostname: emqx
+  #   user: "0:0"   # CLAVE en Windows (permisos de server.key)
+  #   depends_on:
+  #     certs-generator:
+  #       condition: service_completed_successfully
+  #   ports:
+  #     - "1883:1883"
+  #     - "8883:8883"
+  #     - "8083:8083"
+  #     - "18083:18083"
+  #   environment:
+  #     EMQX_NODE__NAME: emqx@emqx
+  #     EMQX_NODE__COOKIE: "cookie_super_larga_random_123456"
+
+  #     EMQX_LISTENERS__WSS__DEFAULT__ENABLE: "false"
+
+
+  #     EMQX_ALLOW_ANONYMOUS: "false"
+  #     EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+  #     EMQX_DASHBOARD__DEFAULT_PASSWORD: admin
+
+  #     EMQX_LISTENERS__SSL__DEFAULT__BIND: "0.0.0.0:8883"
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CACERTFILE: /opt/emqx/etc/certs/ca.crt
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE: /opt/emqx/etc/certs/server.crt
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: /opt/emqx/etc/certs/server.key
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: verify_peer
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__FAIL_IF_NO_PEER_CERT: "true"
+
+  #   volumes:
+  #     - emqx_data:/opt/emqx/data
+  #     - emqx_log:/opt/emqx/log
+  #     - ./infra/certs:/opt/emqx/etc/certs:ro
+  #   networks:
+  #     - smartcampus_net
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "ps | grep -q '[b]eam.smp'"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 60s
   emqx:
-    image: emqx/emqx:5.5
+    image: emqx/emqx:latest 
     container_name: emqx
     hostname: emqx
-    user: "0:0"   # CLAVE en Windows (permisos de server.key)
+    user: "0:0"
     depends_on:
       certs-generator:
         condition: service_completed_successfully
@@ -142,7 +185,6 @@ services:
 
       EMQX_LISTENERS__WSS__DEFAULT__ENABLE: "false"
 
-
       EMQX_ALLOW_ANONYMOUS: "false"
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
       EMQX_DASHBOARD__DEFAULT_PASSWORD: admin
@@ -153,6 +195,14 @@ services:
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: /opt/emqx/etc/certs/server.key
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: verify_peer
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__FAIL_IF_NO_PEER_CERT: "true"
+
+      # =========================
+      # MongoDB Bridge (NUEVO)
+      # =========================
+      EMQX_MONGODB__SERVER: mongo-primary:27017
+      EMQX_MONGODB__POOL_SIZE: 8
+      EMQX_MONGODB__DATABASE: smartcampus
+      EMQX_MONGODB__TYPE: single
 
     volumes:
       - emqx_data:/opt/emqx/data

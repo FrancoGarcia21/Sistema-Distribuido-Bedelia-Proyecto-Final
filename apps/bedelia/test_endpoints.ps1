@@ -1,190 +1,436 @@
-# ===========================================
-# Script de pruebas de endpoints - Bedelia
-# ===========================================
+# ===================================================================
+# Script de Pruebas de Endpoints - Bedelia API
+# Prueba todos los endpoints principales del sistema
+# ===================================================================
 
-$BASE_URL = "http://localhost"
+$BASE_URL = "http://localhost/"
 
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "🧪 PRUEBAS DE ENDPOINTS - SMART CAMPUS" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "`n=========================================="
+Write-Host "PRUEBAS DE ENDPOINTS - SMART CAMPUS"
+Write-Host "==========================================`n"
 
-# Variables para almacenar datos
-$TOKEN = ""
-$ID_AULA = ""
-$ID_PROFESOR = ""
-$ID_MATERIA = ""
-$ID_CRONOGRAMA = ""
+# Variables para tracking
+$endpointsProbados = 0
+$endpointsExitosos = 0
+$endpointsFallidos = 0
 
-# ===========================================
-# 1. HEALTH CHECK
-# ===========================================
-Write-Host "`n[1/10] Health Check..." -ForegroundColor Yellow
+# ========== PASO 1: HEALTH CHECK ==========
+$endpointsProbados++
+Write-Host "[1/15] Health Check..."
 try {
-    $response = Invoke-RestMethod -Uri "$BASE_URL/health" -Method GET
-    Write-Host " Health: $($response.status)" -ForegroundColor Green
+    $health = Invoke-RestMethod -Uri "http://localhost/health" -Method GET -ErrorAction Stop
+    Write-Host "   Health: $($health.status)"
+    $endpointsExitosos++
 } catch {
-    Write-Host " Error: $_" -ForegroundColor Red
+    Write-Host "   Error: $_"
+    $endpointsFallidos++
+}
+Write-Host ""
+
+# ========== PASO 2: LOGIN ==========
+$endpointsProbados++
+Write-Host "[2/15] Login como administrador..."
+try {
+    $loginResponse = Invoke-RestMethod -Uri "$BASE_URL/usuarios/login" -Method POST `
+        -Body (@{
+            usuario = "admin_test"
+            password = "admin123"
+        } | ConvertTo-Json) `
+        -ContentType "application/json" `
+        -ErrorAction Stop
+    
+    $token = $loginResponse.token
+    $tokenCorto = $token.Substring(0, 50) + "..."
+    Write-Host "   Token obtenido: $tokenCorto"
+    
+    $headers = @{
+        "Authorization" = "Bearer $token"
+        "Content-Type" = "application/json"
+    }
+    $endpointsExitosos++
+} catch {
+    Write-Host "   Error: $_"
+    $endpointsFallidos++
     exit 1
 }
+Write-Host ""
 
-# ===========================================
-# 2. LOGIN (obtener JWT)
-# ===========================================
-Write-Host "`n[2/10] Login como administrador..." -ForegroundColor Yellow
+# ========== PASO 3: CREAR AULA ==========
+$endpointsProbados++
+Write-Host "[3/15] Crear aula de prueba..."
 try {
-    $body = @{
-        usuario = "admin_test"
-        password = "admin123"
-    } | ConvertTo-Json
-
-    $response = Invoke-RestMethod -Uri "$BASE_URL/usuarios/login" -Method POST -Body $body -ContentType "application/json"
-    $TOKEN = $response.token
-    Write-Host " Token obtenido: $($TOKEN.Substring(0,50))..." -ForegroundColor Green
-} catch {
-    Write-Host " Error: $_" -ForegroundColor Red
-    exit 1
-}
-
-# Headers con JWT
-$headers = @{
-    "Authorization" = "Bearer $TOKEN"
-    "Content-Type" = "application/json"
-}
-
-# ===========================================
-# 3. CREAR AULA
-# ===========================================
-Write-Host "`n[3/10] Crear aula..." -ForegroundColor Yellow
-try {
-    $body = @{
-        nro_aula = 301
-        piso = 3
-        cupo = 40
+    $aulaData = @{
+        nro_aula = 999
+        piso = 9
+        cupo = 25
         estado = "disponible"
-        descripcion = "Aula de prueba API"
+        descripcion = "Aula de prueba - test_endpoints"
     } | ConvertTo-Json
-
-    $response = Invoke-RestMethod -Uri "$BASE_URL/aulas" -Method POST -Body $body -Headers $headers
-    $ID_AULA = $response.id
-    Write-Host " Aula creada con ID: $ID_AULA" -ForegroundColor Green
+    
+    $aulaResponse = Invoke-RestMethod -Uri "$BASE_URL/aulas" -Method POST `
+        -Headers $headers `
+        -Body $aulaData `
+        -ErrorAction Stop
+    
+    $idAulaCreada = $aulaResponse.id
+    Write-Host "   Aula creada con ID: $idAulaCreada"
+    $endpointsExitosos++
 } catch {
-    Write-Host "  $_" -ForegroundColor Yellow
-}
-
-# ===========================================
-# 4. LISTAR AULAS
-# ===========================================
-Write-Host "`n[4/10] Listar aulas..." -ForegroundColor Yellow
-try {
-    $response = Invoke-RestMethod -Uri "$BASE_URL/aulas" -Method GET -Headers $headers
-    Write-Host " Total de aulas: $($response.total)" -ForegroundColor Green
-} catch {
-    Write-Host " Error: $_" -ForegroundColor Red
-}
-
-# ===========================================
-# 5. OBTENER MÉTRICAS
-# ===========================================
-Write-Host "`n[5/10] Obtener métricas de aulas..." -ForegroundColor Yellow
-try {
-    $response = Invoke-RestMethod -Uri "$BASE_URL/aulas/metricas" -Method GET -Headers $headers
-    Write-Host " Disponibles: $($response.disponibles), Ocupadas: $($response.ocupadas)" -ForegroundColor Green
-} catch {
-    Write-Host " Error: $_" -ForegroundColor Red
-}
-
-# ===========================================
-# 6. OBTENER USUARIO ACTUAL (ME)
-# ===========================================
-Write-Host "`n[6/10] Obtener usuario actual..." -ForegroundColor Yellow
-try {
-    $response = Invoke-RestMethod -Uri "$BASE_URL/usuarios/me" -Method GET -Headers $headers
-    Write-Host " Usuario: $($response.usuario), Rol: $($response.rol)" -ForegroundColor Green
-} catch {
-    Write-Host " Error: $_" -ForegroundColor Red
-}
-
-# ===========================================
-# 7. LISTAR PROFESORES
-# ===========================================
-Write-Host "`n[7/10] Listar profesores..." -ForegroundColor Yellow
-try {
-    $response = Invoke-RestMethod -Uri "$BASE_URL/usuarios/rol/profesor" -Method GET -Headers $headers
-    Write-Host " Total profesores: $($response.total)" -ForegroundColor Green
-    if ($response.total -gt 0) {
-        $ID_PROFESOR = $response.usuarios[0]._id
-        Write-Host "   Usando profesor ID: $ID_PROFESOR" -ForegroundColor Cyan
-    }
-} catch {
-    Write-Host " Error: $_" -ForegroundColor Red
-}
-
-# ===========================================
-# 8. LISTAR MATERIAS
-# ===========================================
-Write-Host "`n[8/10] Listar materias de Ingeniería en Sistemas..." -ForegroundColor Yellow
-try {
-    $carrera = [System.Uri]::EscapeDataString("Ingeniería en Sistemas")
-    $response = Invoke-RestMethod -Uri "$BASE_URL/carreras/$carrera/materias" -Method GET -Headers $headers
-    Write-Host " Total materias: $($response.total)" -ForegroundColor Green
-    if ($response.total -gt 0) {
-        $ID_MATERIA = $response.materias[0]._id
-        Write-Host "   Usando materia ID: $ID_MATERIA" -ForegroundColor Cyan
-    }
-} catch {
-    Write-Host " Error: $_" -ForegroundColor Red
-}
-
-# ===========================================
-# 9. CREAR CRONOGRAMA (si tenemos los datos)
-# ===========================================
-if ($ID_AULA -and $ID_PROFESOR -and $ID_MATERIA) {
-    Write-Host "`n[9/10] Crear cronograma..." -ForegroundColor Yellow
     try {
-        $body = @{
-            id_aula = $ID_AULA
-            id_materia = $ID_MATERIA
-            id_profesor = $ID_PROFESOR
-            id_carrera = "Ingeniería en Sistemas"
-            fecha = (Get-Date).ToString("yyyy-MM-dd")
+        $errorMessage = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Host "   $($errorMessage.error)"
+    } catch {
+        Write-Host "   Error desconocido"
+    }
+    $idAulaCreada = $null
+    $endpointsFallidos++
+}
+Write-Host ""
+
+# ========== PASO 4: LISTAR AULAS ==========
+$endpointsProbados++
+Write-Host "[4/15] Listar aulas..."
+try {
+    $aulas = Invoke-RestMethod -Uri "$BASE_URL/aulas" -Method GET `
+        -Headers $headers `
+        -ErrorAction Stop
+    
+    Write-Host "   Total de aulas: $($aulas.total)"
+    if ($aulas.total -gt 0) {
+        Write-Host "   Primeras aulas:"
+        $aulas.aulas | Select-Object -First 3 | ForEach-Object {
+            Write-Host "      - Aula $($_.nro_aula) | Piso $($_.piso) | Cupo: $($_.cupo) | Estado: $($_.estado)"
+        }
+    }
+    $endpointsExitosos++
+} catch {
+    Write-Host "   Error: $_"
+    $endpointsFallidos++
+}
+Write-Host ""
+
+# ========== PASO 5: OBTENER AULA ESPECÍFICA ==========
+if ($idAulaCreada) {
+    $endpointsProbados++
+    Write-Host "[5/15] Obtener aula especifica (ID: $idAulaCreada)..."
+    try {
+        $aula = Invoke-RestMethod -Uri "$BASE_URL/aulas/$idAulaCreada" -Method GET `
+            -Headers $headers `
+            -ErrorAction Stop
+        
+        Write-Host "   Aula obtenida: Nro $($aula.nro_aula) - Piso $($aula.piso)"
+        $endpointsExitosos++
+    } catch {
+        Write-Host "   Error: $_"
+        $endpointsFallidos++
+    }
+} else {
+    Write-Host "[5/15] Saltando obtencion de aula (no se creo)`n"
+}
+Write-Host ""
+
+# ========== PASO 6: MÉTRICAS DE AULAS ==========
+$endpointsProbados++
+Write-Host "[6/15] Obtener metricas de aulas..."
+try {
+    $metricas = Invoke-RestMethod -Uri "$BASE_URL/aulas/metricas" -Method GET `
+        -Headers $headers `
+        -ErrorAction Stop
+    
+    Write-Host "   Metricas obtenidas:"
+    Write-Host "      Total: $($metricas.total_aulas)"
+    Write-Host "      Disponibles: $($metricas.disponibles)"
+    Write-Host "      Ocupadas: $($metricas.ocupadas)"
+    Write-Host "      Deshabilitadas: $($metricas.deshabilitadas)"
+    $endpointsExitosos++
+} catch {
+    Write-Host "   Error: $_"
+    $endpointsFallidos++
+}
+Write-Host ""
+
+# ========== PASO 7: OBTENER USUARIO ACTUAL ==========
+$endpointsProbados++
+Write-Host "[7/15] Obtener usuario actual..."
+try {
+    $usuarioActual = Invoke-RestMethod -Uri "$BASE_URL/usuarios/me" -Method GET `
+        -Headers $headers `
+        -ErrorAction Stop
+    
+    Write-Host "   Usuario: $($usuarioActual.usuario)"
+    Write-Host "      Rol: $($usuarioActual.rol)"
+    Write-Host "      Email: $($usuarioActual.email)"
+    $endpointsExitosos++
+} catch {
+    Write-Host "   Error: $_"
+    $endpointsFallidos++
+}
+Write-Host ""
+
+# ========== PASO 8: LISTAR PROFESORES ==========
+$endpointsProbados++
+Write-Host "[8/15] Listar profesores..."
+try {
+    $profesores = Invoke-RestMethod -Uri "$BASE_URL/usuarios/rol/profesor" -Method GET `
+        -Headers $headers `
+        -ErrorAction Stop
+    
+    Write-Host "   Total profesores: $($profesores.usuarios.Count)"
+    
+    if ($profesores.usuarios.Count -gt 0) {
+        $idProfesor = $profesores.usuarios[0]._id
+        Write-Host "      Usando profesor ID: $idProfesor"
+        Write-Host "      Nombre: $($profesores.usuarios[0].usuario)"
+    } else {
+        $idProfesor = $null
+        Write-Host "      No hay profesores disponibles"
+    }
+    $endpointsExitosos++
+} catch {
+    Write-Host "   Error: $_"
+    $endpointsFallidos++
+    $idProfesor = $null
+}
+Write-Host ""
+
+# ========== PASO 9: LISTAR MATERIAS DE INGENIERÍA EN SISTEMAS ==========
+$endpointsProbados++
+Write-Host "[9/15] Listar materias de Ingenieria en Sistemas..."
+
+# IMPORTANTE: Usar el mismo nombre exacto que en el seeding
+$nombreCarrera = "Ingenieria en Sistemas"
+$carreraEncoded = [uri]::EscapeDataString($nombreCarrera)
+
+try {
+    $materias = Invoke-RestMethod -Uri "$BASE_URL/carreras/$carreraEncoded/materias" -Method GET `
+        -Headers $headers `
+        -ErrorAction Stop
+    
+    Write-Host "   Total materias: $($materias.total)"
+    
+    if ($materias.total -gt 0) {
+        Write-Host "   Materias encontradas:"
+        $materias.materias | ForEach-Object {
+            Write-Host "      - $($_.materia) [$($_.codigo_materia)]"
+            Write-Host "        Anio $($_.anio) | Cuatrimestre $($_.cuatrimestre) | $($_.carga_horaria)hs"
+        }
+        
+        # Guardar primera materia para pruebas
+        $idMateria = $materias.materias[0]._id
+        $nombreMateria = $materias.materias[0].materia
+    } else {
+        Write-Host "   No hay materias para esta carrera"
+        Write-Host "      Ejecuta primero: powershell -ExecutionPolicy Bypass -File .\seed_data.ps1"
+        $idMateria = $null
+    }
+    $endpointsExitosos++
+} catch {
+    Write-Host "   Error: $_"
+    $idMateria = $null
+    $endpointsFallidos++
+}
+Write-Host ""
+
+# ========== PASO 10: OBTENER MATERIA ESPECÍFICA ==========
+if ($idMateria) {
+    $endpointsProbados++
+    Write-Host "[10/15] Obtener materia especifica ($nombreMateria)..."
+    try {
+        $materia = Invoke-RestMethod -Uri "$BASE_URL/carreras/materias/$idMateria" -Method GET `
+            -Headers $headers `
+            -ErrorAction Stop
+        
+        Write-Host "   Materia obtenida:"
+        Write-Host "      Carrera: $($materia.carrera)"
+        Write-Host "      Materia: $($materia.materia)"
+        Write-Host "      Codigo: $($materia.codigo_materia)"
+        Write-Host "      Activa: $($materia.activa)"
+        $endpointsExitosos++
+    } catch {
+        Write-Host "   Error: $_"
+        $endpointsFallidos++
+    }
+} else {
+    Write-Host "[10/15] Saltando obtencion de materia (no hay materias)`n"
+}
+Write-Host ""
+
+# ========== PASO 11: LISTAR MATERIAS ASIGNADAS A PROFESOR ==========
+if ($idProfesor) {
+    $endpointsProbados++
+    Write-Host "[11/15] Listar materias asignadas al profesor..."
+    try {
+        $materiasProfesor = Invoke-RestMethod -Uri "$BASE_URL/carreras/profesor/$idProfesor/materias" -Method GET `
+            -Headers $headers `
+            -ErrorAction Stop
+        
+        Write-Host "   Materias asignadas: $($materiasProfesor.total)"
+        
+        if ($materiasProfesor.total -gt 0) {
+            $materiasProfesor.materias | ForEach-Object {
+                Write-Host "      - $($_.materia) [$($_.codigo_materia)]"
+            }
+        }
+        $endpointsExitosos++
+    } catch {
+        Write-Host "   Error: $_"
+        $endpointsFallidos++
+    }
+} else {
+    Write-Host "[11/15] Saltando materias de profesor (no hay profesor)`n"
+}
+Write-Host ""
+
+# ========== PASO 12: CREAR CRONOGRAMA ==========
+if ($idAulaCreada -and $idMateria -and $idProfesor) {
+    $endpointsProbados++
+    Write-Host "[12/15] Crear cronograma..."
+    try {
+        $fechaInicio = (Get-Date).AddDays(7).ToString("yyyy-MM-dd")
+        $fechaFin = (Get-Date).AddDays(120).ToString("yyyy-MM-dd")
+        
+        $cronogramaData = @{
+            id_aula = $idAulaCreada
+            id_materia = $idMateria
+            id_profesor = $idProfesor
+            fecha_inicio = $fechaInicio
+            fecha_fin = $fechaFin
             hora_inicio = "14:00"
-            hora_fin = "16:00"
-            tipo = "teorica"
+            hora_fin = "18:00"
+            dias_semana = @("Lunes", "Miercoles")
+            carrera = $nombreCarrera
         } | ConvertTo-Json
-
-        $response = Invoke-RestMethod -Uri "$BASE_URL/cronograma" -Method POST -Body $body -Headers $headers
-        $ID_CRONOGRAMA = $response.id
-        Write-Host " Cronograma creado con ID: $ID_CRONOGRAMA" -ForegroundColor Green
+        
+        $cronogramaResponse = Invoke-RestMethod -Uri "$BASE_URL/cronograma" -Method POST `
+            -Headers $headers `
+            -Body $cronogramaData `
+            -ErrorAction Stop
+        
+        $idCronograma = $cronogramaResponse.id
+        Write-Host "   Cronograma creado: $idCronograma"
+        Write-Host "      Fecha: $fechaInicio al $fechaFin"
+        Write-Host "      Horario: 14:00 - 18:00"
+        Write-Host "      Dias: Lunes, Miercoles"
+        $endpointsExitosos++
     } catch {
-        Write-Host "  $_" -ForegroundColor Yellow
+        try {
+            $errorMessage = $_.ErrorDetails.Message | ConvertFrom-Json
+            Write-Host "   Error: $($errorMessage.error)"
+        } catch {
+            Write-Host "   Error desconocido"
+        }
+        $idCronograma = $null
+        $endpointsFallidos++
     }
 } else {
-    Write-Host "`n[9/10] Saltando creación de cronograma (faltan datos)" -ForegroundColor Yellow
+    Write-Host "[12/15] Saltando creacion de cronograma (faltan datos)`n"
+    $idCronograma = $null
 }
+Write-Host ""
 
-# ===========================================
-# 10. VALIDAR CUPO (si se creó cronograma)
-# ===========================================
-if ($ID_CRONOGRAMA) {
-    Write-Host "`n[10/10] Validar cupo del cronograma..." -ForegroundColor Yellow
+# ========== PASO 13: LISTAR CRONOGRAMAS ==========
+$endpointsProbados++
+Write-Host "[13/15] Listar cronogramas..."
+try {
+    $cronogramas = Invoke-RestMethod -Uri "$BASE_URL/cronograma" -Method GET `
+        -Headers $headers `
+        -ErrorAction Stop
+    
+    Write-Host "   Total cronogramas: $($cronogramas.total)"
+    
+    if ($cronogramas.total -gt 0) {
+        Write-Host "   Cronogramas activos:"
+        $cronogramas.cronogramas | Select-Object -First 3 | ForEach-Object {
+            Write-Host "      - Aula: $($_.id_aula) | Estado: $($_.estado)"
+            Write-Host "        $($_.fecha_inicio) al $($_.fecha_fin)"
+        }
+    }
+    $endpointsExitosos++
+} catch {
+    Write-Host "   Error: $_"
+    $endpointsFallidos++
+}
+Write-Host ""
+
+# ========== PASO 14: VALIDAR CUPO DE CRONOGRAMA ==========
+if ($idCronograma) {
+    $endpointsProbados++
+    Write-Host "[14/15] Validar cupo del cronograma..."
     try {
-        $response = Invoke-RestMethod -Uri "$BASE_URL/cronograma/$ID_CRONOGRAMA/cupo" -Method GET -Headers $headers
-        Write-Host " Cupo disponible: $($response.cupo_disponible) de $($response.cupo_total)" -ForegroundColor Green
+        $validacionCupo = Invoke-RestMethod -Uri "$BASE_URL/cronograma/$idCronograma/validar-cupo" -Method GET `
+            -Headers $headers `
+            -ErrorAction Stop
+        
+        Write-Host "   Validacion de cupo:"
+        Write-Host "      Cupo disponible: $($validacionCupo.cupo_disponible)"
+        Write-Host "      Capacidad maxima: $($validacionCupo.capacidad_maxima)"
+        Write-Host "      Estudiantes inscritos: $($validacionCupo.estudiantes_inscritos)"
+        Write-Host "      Puede inscribirse: $($validacionCupo.puede_inscribirse)"
+        $endpointsExitosos++
     } catch {
-        Write-Host " Error: $_" -ForegroundColor Red
+        Write-Host "   Error: $_"
+        $endpointsFallidos++
     }
 } else {
-    Write-Host "`n[10/10] Saltando validación de cupo" -ForegroundColor Yellow
+    Write-Host "[14/15] Saltando validacion de cupo (no hay cronograma)`n"
+}
+Write-Host ""
+
+# ========== PASO 15: ACTUALIZAR ESTADO DE AULA ==========
+if ($idAulaCreada) {
+    $endpointsProbados++
+    Write-Host "[15/15] Actualizar estado de aula a 'deshabilitada'..."
+    try {
+        $estadoData = @{
+            estado = "deshabilitada"
+        } | ConvertTo-Json
+        
+        $estadoResponse = Invoke-RestMethod -Uri "$BASE_URL/aulas/$idAulaCreada/estado" -Method PATCH `
+            -Headers $headers `
+            -Body $estadoData `
+            -ErrorAction Stop
+        
+        Write-Host "   $($estadoResponse.mensaje)"
+        $endpointsExitosos++
+    } catch {
+        Write-Host "   Error: $_"
+        $endpointsFallidos++
+    }
+} else {
+    Write-Host "[15/15] Saltando actualizacion de estado (no hay aula)`n"
+}
+Write-Host ""
+
+# ========== RESUMEN FINAL ==========
+Write-Host "=========================================="
+Write-Host "PRUEBAS COMPLETADAS"
+Write-Host "==========================================`n"
+
+$porcentajeExito = [math]::Round(($endpointsExitosos / $endpointsProbados) * 100, 2)
+
+Write-Host "Resumen:"
+Write-Host "   Endpoints probados: $endpointsProbados"
+Write-Host "   Exitosos: $endpointsExitosos"
+Write-Host "   Fallidos: $endpointsFallidos"
+Write-Host "   Tasa de exito: $porcentajeExito%"
+
+Write-Host "`nDatos de prueba creados:"
+if ($idAulaCreada) {
+    Write-Host "   Aula: $idAulaCreada"
+}
+if ($idCronograma) {
+    Write-Host "   Cronograma: $idCronograma"
 }
 
-# ===========================================
-# RESUMEN
-# ===========================================
-Write-Host "`n==========================================" -ForegroundColor Cyan
-Write-Host "✅ PRUEBAS COMPLETADAS" -ForegroundColor Green
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "Token JWT:  Generado"
-Write-Host "Endpoints probados: 10"
-Write-Host "Aula creada: $(if($ID_AULA){''+$ID_AULA}else{'  No'})"
-Write-Host "Cronograma creado: $(if($ID_CRONOGRAMA){' '+$ID_CRONOGRAMA}else{'  No'})"
-Write-Host "`n🚀 Bedelia API funcionando correctamente"
+Write-Host "`nEstado del sistema:"
+if ($porcentajeExito -ge 80) {
+    Write-Host "   Bedelia API funcionando correctamente"
+} elseif ($porcentajeExito -ge 50) {
+    Write-Host "   Algunos endpoints tienen problemas"
+} else {
+    Write-Host "   Sistema tiene errores criticos"
+}
+
+Write-Host "`nVer logs detallados:"
+Write-Host "   docker-compose logs app_bedelia --tail=100"
+Write-Host ""

@@ -150,6 +150,7 @@ from datetime import datetime
 
 from config import APP_NAME, DEBUG
 from db.mongo import get_mongo_db
+from flask import render_template
 
 # Importar blueprints
 from routes import aulas_bp, usuarios_bp, cronograma_bp, carreras_bp
@@ -177,6 +178,12 @@ def health():
         "status": "ok",
         "timestamp": datetime.utcnow().isoformat()
     }), 200
+
+
+@app.route('/', methods=['GET'])
+def index():
+    """Ruta para el Dashboard Principal"""
+    return render_template('dashboard.html')
 
 
 if __name__ == '__main__':

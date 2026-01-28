@@ -133,4 +133,3 @@ def get_mqtt_client() -> MQTTClient | None:
     except Exception as e:
         print(f"❌ No se pudo inicializar MQTT: {e}")
         return None
-
