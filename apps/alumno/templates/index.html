@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Alumno</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    .row { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+    input, button { padding: 8px 10px; }
+    .box { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
+    pre { background: #0b1020; color: #cfe3ff; padding: 12px; border-radius: 10px; overflow: auto; max-height: 320px; }
+    .muted { color: #666; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h2>App Alumno (MVP)</h2>
+  <div class="muted">Objetivo: login → MQTT connect → subscribe → ver notificaciones.</div>
+
+  <div class="box">
+    <h3>1) Login</h3>
+    <div class="row">
+      <input id="username" placeholder="alumnoA o alumnoB" value="alumnoA"/>
+      <input id="password" placeholder="password" value="1234" type="password"/>
+      <button onclick="doLogin()">Login</button>
+    </div>
+    <div class="muted">Usuarios demo: alumnoA/1234 (carrera 1) y alumnoB/1234 (carrera 2)</div>
+  </div>
+
+  <div class="box">
+    <h3>2) MQTT Connect (TLS + JWT)</h3>
+    <div class="row">
+      <button onclick="doConnect()">Conectar a EMQX</button>
+      <span class="muted">Mirá logs en la consola de eventos</span>
+    </div>
+  </div>
+
+  <div class="box">
+    <h3>3) Subscribe</h3>
+    <div class="row">
+      <input id="id_carrera" placeholder="id_carrera" value="1"/>
+      <input id="id_materia" placeholder="id_materia" value="101"/>
+      <button onclick="doSubscribe()">Suscribirse</button>
+    </div>
+    <div class="muted">Tópico: universidad/notificaciones/aula/{id_carrera}/{id_materia}</div>
+  </div>
+
+  <div class="box">
+    <h3>Eventos en vivo</h3>
+    <pre id="log"></pre>
+  </div>
+
+<script>
+  let TOKEN = null;
+
+  const logEl = document.getElementById("log");
+  const log = (obj) => {
+    const line = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+    logEl.textContent = line + "\n\n" + logEl.textContent;
+  };
+
+  async function doLogin() {
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+
+    const res = await fetch("/auth/login", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({username, password})
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      log({type:"ui", event:"login_error", data});
+      return;
+    }
+
+    TOKEN = data.token;
+    document.getElementById("id_carrera").value = data.payload.id_carrera;
+    log({type:"ui", event:"login_ok", payload:data.payload});
+  }
+
+  async function doConnect() {
+    if (!TOKEN) {
+      log("Primero login (no hay TOKEN).");
+      return;
+    }
+    const res = await fetch("/mqtt/connect", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({token: TOKEN})
+    });
+    const data = await res.json();
+    log({type:"ui", event:"mqtt_connect", status: res.status, data});
+  }
+
+  async function doSubscribe() {
+    const id_carrera = document.getElementById("id_carrera").value.trim();
+    const id_materia = document.getElementById("id_materia").value.trim();
+
+    const res = await fetch("/mqtt/subscribe", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({id_carrera, id_materia})
+    });
+    const data = await res.json();
+    log({type:"ui", event:"subscribe", status: res.status, data});
+  }
+
+  // SSE auto
+  const ev = new EventSource("/events");
+  ev.onmessage = (e) => {
+    try { log(JSON.parse(e.data)); }
+    catch { log(e.data); }
+  };
+  ev.onerror = () => log({type:"sse", event:"error"});
+</script>
+</body>
+</html>
