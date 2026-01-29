@@ -29,3 +29,24 @@ docker-compose logs app_bedelia --tail=50
 MongoDB:
 
 docker-compose logs mongo-primary --tail=30
+
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c3VhcmlvIjoicHJvZl90ZXN0Iiwicm9sIjoicHJvZmVzb3IiLCJpZF91c3VhcmlvIjoiTm9uZSIsIm5vbWJyZSI6bnVsbCwiaWF0IjoxNzY5NjUyMDg1LCJleHAiOjE3Njk2NTI5ODV9.Uw7NT_iyhYJNezlErRXn0O0vo4G3jGnY3ovlI5wsdB4
+
+db.aulas.updateOne(
+  {_id: ObjectId('69782821e3bbc9e3e6663726')},
+  {$set: {estado: 'disponible', cupo: 40}}
+);
+
+// Configurar asignación profesor-materia
+db.profesor_carrera_materia.updateOne(
+  {
+    id_profesor: ObjectId('69782822e3bbc9e3e6663728'),
+    id_materia: ObjectId('69782c1728e4a86d0566693e')
+  },
+  $set: {
+    carrera: 'Ingeniería en Sistemas',
+    activa: true,
+    fecha_asignacion: new Date()
+  }},
+  {upsert: true}
+);
