@@ -5,59 +5,84 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Alumno</title>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 24px; }
-    .row { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-    input, button { padding: 8px 10px; }
-    .box { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
-    pre { background: #0b1020; color: #cfe3ff; padding: 12px; border-radius: 10px; overflow: auto; max-height: 320px; }
+    body { font-family: system-ui, sans-serif; margin: 24px; background:#fafafa; }
+    h2,h3 { margin: 0 0 10px 0; }
     .muted { color: #666; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
+    .card { background: white; border: 1px solid #e5e5e5; border-radius: 14px; padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    input, button { padding: 8px 10px; border-radius: 10px; border: 1px solid #ddd; }
+    button { cursor: pointer; background: #111; color: white; border: 1px solid #111; }
+    button.secondary { background: white; color: #111; }
+    button.danger { background: #b00020; border-color:#b00020; }
+    .list { display: flex; flex-direction: column; gap: 10px; }
+    .materia { border: 1px solid #eee; border-radius: 12px; padding: 12px; }
+    .tag { font-size: 12px; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; color:#444; }
+    pre { background: #0b1020; color: #cfe3ff; padding: 12px; border-radius: 12px; overflow: auto; max-height: 360px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .small { font-size: 12px; }
   </style>
 </head>
 <body>
-  <h2>App Alumno (MVP)</h2>
-  <div class="muted">Objetivo: login → MQTT connect → subscribe → ver notificaciones.</div>
+  <h2>App Alumno</h2>
+  <div class="muted">Login → ver materias → anotarse → recibir cambios de horarios por MQTT.</div>
 
-  <div class="box">
-    <h3>1) Login</h3>
-    <div class="row">
-      <input id="username" placeholder="alumnoA o alumnoB" value="alumnoA"/>
-      <input id="password" placeholder="password" value="1234" type="password"/>
-      <button onclick="doLogin()">Login</button>
+  <div class="grid" style="margin-top:14px;">
+    <div class="card">
+      <h3>Cuenta</h3>
+      <div class="row" style="margin-top:8px;">
+        <input id="username" placeholder="alumnoA o alumnoB" value="alumnoA"/>
+        <input id="password" placeholder="password" value="1234" type="password"/>
+        <button onclick="doLogin()">Entrar</button>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button class="secondary" onclick="doConnect()">Conectar MQTT</button>
+        <span id="status" class="tag">desconectado</span>
+      </div>
+
+      <div class="muted" style="margin-top:10px;">
+        Demo: alumnoA/1234 (carrera 1) — alumnoB/1234 (carrera 2)
+      </div>
     </div>
-    <div class="muted">Usuarios demo: alumnoA/1234 (carrera 1) y alumnoB/1234 (carrera 2)</div>
-  </div>
 
-  <div class="box">
-    <h3>2) MQTT Connect (TLS + JWT)</h3>
-    <div class="row">
-      <button onclick="doConnect()">Conectar a EMQX</button>
-      <span class="muted">Mirá logs en la consola de eventos</span>
+    <div class="card">
+      <h3>Mis materias</h3>
+      <div class="muted">Anotarte = suscribirte a <span class="mono">universidad/notificaciones/aula/{carrera}/{materia}</span></div>
+      <div id="materias" class="list" style="margin-top:10px;"></div>
     </div>
-  </div>
 
-  <div class="box">
-    <h3>3) Subscribe</h3>
-    <div class="row">
-      <input id="id_carrera" placeholder="id_carrera" value="1"/>
-      <input id="id_materia" placeholder="id_materia" value="101"/>
-      <button onclick="doSubscribe()">Suscribirse</button>
+    <div class="card">
+      <h3>Último horario por materia</h3>
+      <div class="muted">Esto mejora mucho si los mensajes llegan como <b>retained</b>.</div>
+      <div id="ultimos" class="list" style="margin-top:10px;"></div>
     </div>
-    <div class="muted">Tópico: universidad/notificaciones/aula/{id_carrera}/{id_materia}</div>
-  </div>
 
-  <div class="box">
-    <h3>Eventos en vivo</h3>
-    <pre id="log"></pre>
+    <div class="card">
+      <h3>Cambios recientes</h3>
+      <div class="muted">Feed de mensajes recibidos.</div>
+      <pre id="log" class="small"></pre>
+    </div>
   </div>
 
 <script>
   let TOKEN = null;
+  let PAYLOAD = null;
+  const subscribed = new Set(); // topics
 
   const logEl = document.getElementById("log");
+  const statusEl = document.getElementById("status");
+  const materiasEl = document.getElementById("materias");
+  const ultimosEl = document.getElementById("ultimos");
+
   const log = (obj) => {
     const line = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
     logEl.textContent = line + "\n\n" + logEl.textContent;
   };
+
+  function topicOf(id_carrera, id_materia) {
+    return `universidad/notificaciones/aula/${id_carrera}/${id_materia}`;
+  }
 
   async function doLogin() {
     const username = document.getElementById("username").value.trim();
@@ -76,8 +101,97 @@
     }
 
     TOKEN = data.token;
-    document.getElementById("id_carrera").value = data.payload.id_carrera;
-    log({type:"ui", event:"login_ok", payload:data.payload});
+    PAYLOAD = data.payload;
+
+    log({type:"ui", event:"login_ok", payload: PAYLOAD});
+    statusEl.textContent = "logueado";
+    await loadMaterias();
+  }
+
+  async function loadMaterias() {
+    if (!TOKEN) return;
+
+    const res = await fetch("/api/materias", {
+      headers: { "Authorization": `Bearer ${TOKEN}` }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      log({type:"ui", event:"materias_error", data});
+      return;
+    }
+
+    materiasEl.innerHTML = "";
+    for (const m of data.materias) {
+      materiasEl.appendChild(renderMateria(m));
+    }
+  }
+
+  function renderMateria(m) {
+    const div = document.createElement("div");
+    div.className = "materia";
+
+    const t = topicOf(PAYLOAD.id_carrera, m.id_materia);
+
+    const title = document.createElement("div");
+    title.innerHTML = `<b>${m.nombre}</b> <span class="muted">(#${m.id_materia})</span>`;
+    div.appendChild(title);
+
+    const info = document.createElement("div");
+    info.className = "muted mono small";
+    info.style.marginTop = "6px";
+    info.textContent = t;
+    div.appendChild(info);
+
+    const row = document.createElement("div");
+    row.className = "row";
+    row.style.marginTop = "10px";
+
+    const btn = document.createElement("button");
+    btn.textContent = subscribed.has(t) ? "Desanotarme" : "Anotarme";
+    btn.className = subscribed.has(t) ? "danger" : "";
+
+    btn.onclick = async () => {
+      if (!TOKEN || !PAYLOAD) return;
+
+      if (!subscribed.has(t)) {
+        const res = await fetch("/mqtt/subscribe", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({id_carrera: PAYLOAD.id_carrera, id_materia: m.id_materia})
+        });
+        const data = await res.json();
+        log({type:"ui", event:"subscribe", status: res.status, data});
+        if (res.ok) {
+          subscribed.add(t);
+          btn.textContent = "Desanotarme";
+          btn.className = "danger";
+        }
+      } else {
+        const res = await fetch("/mqtt/unsubscribe", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({id_carrera: PAYLOAD.id_carrera, id_materia: m.id_materia})
+        });
+        const data = await res.json();
+        log({type:"ui", event:"unsubscribe", status: res.status, data});
+        if (res.ok) {
+          subscribed.delete(t);
+          btn.textContent = "Anotarme";
+          btn.className = "";
+        }
+      }
+    };
+
+    row.appendChild(btn);
+
+    const badge = document.createElement("span");
+    badge.className = "tag";
+    badge.textContent = subscribed.has(t) ? "suscripto" : "no suscripto";
+    row.appendChild(badge);
+
+    div.appendChild(row);
+
+    return div;
   }
 
   async function doConnect() {
@@ -92,28 +206,57 @@
     });
     const data = await res.json();
     log({type:"ui", event:"mqtt_connect", status: res.status, data});
+    if (res.ok) statusEl.textContent = "mqtt conectando...";
   }
 
-  async function doSubscribe() {
-    const id_carrera = document.getElementById("id_carrera").value.trim();
-    const id_materia = document.getElementById("id_materia").value.trim();
-
-    const res = await fetch("/mqtt/subscribe", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({id_carrera, id_materia})
-    });
-    const data = await res.json();
-    log({type:"ui", event:"subscribe", status: res.status, data});
-  }
-
-  // SSE auto
+  // SSE
   const ev = new EventSource("/events");
   ev.onmessage = (e) => {
-    try { log(JSON.parse(e.data)); }
-    catch { log(e.data); }
+    let msg = null;
+    try { msg = JSON.parse(e.data); }
+    catch { msg = {type:"raw", data:e.data}; }
+
+    // status MQTT
+    if (msg.type === "mqtt" && msg.event === "connect" && msg.rc === 0) {
+      statusEl.textContent = "mqtt conectado";
+    }
+    if (msg.type === "mqtt" && msg.event === "disconnect") {
+      statusEl.textContent = "mqtt desconectado";
+    }
+
+    // Si llega un mensaje, lo reflejamos en "últimos"
+    if (msg.type === "mqtt" && msg.event === "message") {
+      renderUltimos(msg.topic, msg.payload);
+    }
+
+    log(msg);
   };
-  ev.onerror = () => log({type:"sse", event:"error"});
+
+  function renderUltimos(topic, payload) {
+    // actualizamos o creamos un item por topic
+    const id = `t_${btoa(topic).replace(/=/g,'')}`;
+    let item = document.getElementById(id);
+
+    if (!item) {
+      item = document.createElement("div");
+      item.className = "materia";
+      item.id = id;
+      ultimosEl.prepend(item);
+    }
+
+    item.innerHTML = `
+      <div class="mono small muted">${topic}</div>
+      <div style="margin-top:8px;"><b>Último estado</b></div>
+      <pre class="small" style="margin-top:8px;">${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
+    `;
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+  }
 </script>
 </body>
 </html>
