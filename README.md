@@ -16,6 +16,11 @@ db.getCollectionNames();
 recrear datos de mongo
 
 docker exec -it app_bedelia python test_models_utils.py
+############################################
+
+# APP ALUMNO
+docker-compose up -d --build --force-recreate app_alumno
+
 ###############################################
 comandos para ejecutar los ps1
 

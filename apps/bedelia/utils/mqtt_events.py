@@ -414,6 +414,122 @@ import json
 from datetime import datetime
 from typing import Dict, Any
 
+TOPICS = {
+    # ======================
+    # ASIGNACIÓN Y GESTIÓN
+    # ======================
+    'ASIGNACION_AULA': 'universidad/aulas/asignacion',
+    'LIBERAR_AULA': 'universidad/aulas/liberar',
+    'NUEVA_AULA': 'universidad/aulas/nueva',
+    
+    # ======================
+    # EVENTOS (con IDs dinámicos)
+    # ======================
+    # Formato: universidad/eventos/aula/{tipo}/{id_carrera}/{id_materia}
+    'EVENTO_AULA_ASIGNADA': 'universidad/eventos/aula/asignada',  # Base, se completa con IDs
+    'EVENTO_AULA_LIBERADA': 'universidad/eventos/aula/liberada',   # Base, se completa con IDs
+    
+    # ======================
+    # NOTIFICACIONES (con IDs dinámicos)
+    # ======================
+    # Formato: universidad/notificaciones/aula/{id_carrera}/{id_materia}
+    'NOTIFICACION_AULA': 'universidad/notificaciones/aula',  # Base, se completa con IDs
+    'NOTIFICACION_AULA_WILDCARD': 'universidad/notificaciones/aula/+/+',  # Suscripción a todas
+    
+    # ======================
+    # ERRORES (con IDs dinámicos)
+    # ======================
+    'ERROR_PROFESOR': 'universidad/errores/profesor',  # Base, se completa con id_profesor
+    'ERROR_USUARIO': 'universidad/errores',  # Base, se completa con id_usuario
+    
+    # ======================
+    # MÉTRICAS
+    # ======================
+    'METRICAS_EMQX': 'universidad/metricas/emqx',
+    'METRICAS_AULAS': 'universidad/metricas/aulas',
+    'METRICAS_USUARIOS': 'universidad/metricas/usuarios'
+}
+
+
+# ==============================================
+# FUNCIONES HELPER PARA CONSTRUIR TOPICS DINÁMICOS
+# ==============================================
+
+def build_topic_evento_asignada(id_carrera: str, id_materia: str) -> str:
+    """
+    Construye el topic de evento de aula asignada
+    Formato: universidad/eventos/aula/asignada/{id_carrera}/{id_materia}
+    
+    Args:
+        id_carrera: ID de la carrera (string o ObjectId convertido)
+        id_materia: ID de la materia (string o ObjectId convertido)
+    
+    Returns:
+        Topic completo: "universidad/eventos/aula/asignada/{id_carrera}/{id_materia}"
+    
+    Ejemplo:
+        >>> build_topic_evento_asignada("507f1f77bcf86cd799439011", "507f191e810c19729de860ea")
+        'universidad/eventos/aula/asignada/507f1f77bcf86cd799439011/507f191e810c19729de860ea'
+    """
+    return f"{TOPICS['EVENTO_AULA_ASIGNADA']}/{id_carrera}/{id_materia}"
+
+
+def build_topic_evento_liberada(id_carrera: str, id_materia: str) -> str:
+    """
+    Construye el topic de evento de aula liberada
+    Formato: universidad/eventos/aula/liberada/{id_carrera}/{id_materia}
+    
+    Args:
+        id_carrera: ID de la carrera (string o ObjectId convertido)
+        id_materia: ID de la materia (string o ObjectId convertido)
+    
+    Returns:
+        Topic completo: "universidad/eventos/aula/liberada/{id_carrera}/{id_materia}"
+    """
+    return f"{TOPICS['EVENTO_AULA_LIBERADA']}/{id_carrera}/{id_materia}"
+
+
+def build_topic_notificacion(id_carrera: str, id_materia: str) -> str:
+    """
+    Construye el topic de notificación de aula
+    Formato: universidad/notificaciones/aula/{id_carrera}/{id_materia}
+    
+    Args:
+        id_carrera: ID de la carrera (string o ObjectId convertido)
+        id_materia: ID de la materia (string o ObjectId convertido)
+    
+    Returns:
+        Topic completo: "universidad/notificaciones/aula/{id_carrera}/{id_materia}"
+    """
+    return f"{TOPICS['NOTIFICACION_AULA']}/{id_carrera}/{id_materia}"
+
+
+def build_topic_error_profesor(id_profesor: str) -> str:
+    """
+    Construye el topic de error de profesor
+    Formato: universidad/errores/profesor/{id_profesor}
+    
+    Args:
+        id_profesor: ID del profesor (string o ObjectId convertido)
+    
+    Returns:
+        Topic completo: "universidad/errores/profesor/{id_profesor}"
+    """
+    return f"{TOPICS['ERROR_PROFESOR']}/{id_profesor}"
+
+
+def build_topic_error_usuario(id_usuario: str) -> str:
+    """
+    Construye el topic de error de usuario
+    Formato: universidad/errores/{id_usuario}
+    
+    Args:
+        id_usuario: ID del usuario (string o ObjectId convertido)
+    
+    Returns:
+        Topic completo: "universidad/errores/{id_usuario}"
+    """
+    return f"{TOPICS['ERROR_USUARIO']}/{id_usuario}"
 
 class MQTTEventPublisher:
     """
@@ -478,13 +594,18 @@ class MQTTEventPublisher:
         return MQTTEventPublisher._publicar(topic, payload)
     
     @staticmethod
-    def publicar_aula_asignada(id_aula: str, id_cronograma: str, datos: Dict[str, Any]) -> bool:
-        """Publica evento cuando se asigna un aula"""
-        topic = f"{MQTTEventPublisher.BASE_TOPIC}/aulas/asignada"
+    def publicar_aula_asignada(id_aula: str, id_carrera: int, id_materia: int, datos: Dict[str, Any]) -> bool:
+        """
+        Publica evento cuando se asigna un aula a una carrera/materia
+        
+        Topic: universidad/eventos/aula/asignada/{id_carrera}/{id_materia}
+        """
+        topic = f"{MQTTEventPublisher.BASE_TOPIC}/eventos/aula/asignada/{id_carrera}/{id_materia}"
         payload = {
             "evento": "aula_asignada",
             "id_aula": id_aula,
-            "id_cronograma": id_cronograma,
+            "id_carrera": id_carrera,
+            "id_materia": id_materia,
             "datos": datos
         }
         return MQTTEventPublisher._publicar(topic, payload)
@@ -504,12 +625,20 @@ class MQTTEventPublisher:
     # ==================== NOTIFICACIONES ====================
     
     @staticmethod
-    def notificar_alumnos(carrera: str, id_materia: str, mensaje: str, datos: Dict[str, Any]) -> bool:
-        """Notifica a alumnos de una carrera/materia específica"""
-        topic = f"{MQTTEventPublisher.BASE_TOPIC}/notificaciones/{carrera}/{id_materia}"
+    def notificar_alumnos(id_carrera: int, id_materia: int, mensaje: str, datos: Dict[str, Any]) -> bool:
+        """
+        Notifica a alumnos de una carrera/materia específica
+        
+        Args:
+            id_carrera: ID numérico de la carrera (ej: 1, 2, 3)
+            id_materia: ID numérico de la materia (ej: 101, 102)
+            mensaje: Mensaje de notificación
+            datos: Datos adicionales
+        """
+        topic = f"{MQTTEventPublisher.BASE_TOPIC}/notificaciones/aula/{id_carrera}/{id_materia}"
         payload = {
             "evento": "notificacion_alumnos",
-            "carrera": carrera,
+            "id_carrera": id_carrera,
             "id_materia": id_materia,
             "mensaje": mensaje,
             "datos": datos

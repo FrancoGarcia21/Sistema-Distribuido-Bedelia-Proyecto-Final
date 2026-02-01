@@ -4,7 +4,7 @@ APP_NAME = os.getenv("APP_NAME", "App_Alumno")
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
 
 # JWT (DEMO): después lo alineamos 1:1 con Bedelía/EMQX
-JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_change_me")
+JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXP_MINUTES = int(os.getenv("JWT_EXP_MINUTES", "60"))
 
