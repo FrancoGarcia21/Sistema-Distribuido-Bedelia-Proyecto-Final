@@ -316,13 +316,17 @@ services:
     depends_on:
       certs-generator:
         condition: service_completed_successfully
+      mongo-init:
+        condition: service_completed_successfully
       emqx:
         condition: service_healthy
     environment:
       APP_NAME: App_Alumno
       DEBUG: "true"
 
-      # JWT (DEMO). Luego lo alineamos con Bedelía y emqx_auth_jwt.conf
+      MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+      MONGO_DB_NAME: smartcampus
+
       JWT_SECRET: "dev_secret_change_me"
       JWT_ALGORITHM: "HS256"
       JWT_EXP_MINUTES: "60"
@@ -334,7 +338,6 @@ services:
       MQTT_TLS_CERT: "/opt/certs/alumno.crt"
       MQTT_TLS_KEY: "/opt/certs/alumno.key"
 
-      # Probar "password" primero. Si tu EMQX lo quiere distinto, cambiamos esto.
       MQTT_JWT_MODE: "password"
 
     volumes:
