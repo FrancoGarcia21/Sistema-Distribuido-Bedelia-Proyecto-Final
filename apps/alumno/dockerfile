@@ -2,7 +2,6 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Paquetes útiles para healthchecks/debug
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
   && rm -rf /var/lib/apt/lists/*
@@ -17,5 +16,4 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 5001
 
-# Flask dev server para arrancar rápido; después lo pasamos a gunicorn si querés
 CMD ["python", "app.py"]

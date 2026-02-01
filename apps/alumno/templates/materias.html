@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Alumno - Materias</title>
+  <link rel="stylesheet" href="/static/css/app.css"/>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Alumno</div>
+    <div class="right">
+      <span id="who" class="tag"></span>
+      <button id="btnLogout" class="btn secondary">Salir</button>
+    </div>
+  </div>
+
+  <div class="container wide">
+    <div class="grid">
+      <div class="card">
+        <h2>Mis materias</h2>
+        <p class="muted">Anotarte = suscribirte a notificaciones en tiempo real.</p>
+        <div id="materias" class="list"></div>
+      </div>
+
+      <div class="card">
+        <h2>Notificaciones</h2>
+        <p class="muted">Se actualiza cuando Bedelía/Reglas publican cambios.</p>
+        <div id="feed" class="feed"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/static/js/ui_materias.js"></script>
+</body>
+</html>

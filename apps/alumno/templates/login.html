@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Alumno - Login</title>
+  <link rel="stylesheet" href="/static/css/app.css"/>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Alumno</h1>
+      <p class="muted">Ingresá con tu usuario para ver tus materias.</p>
+
+      <div class="form">
+        <label>Usuario</label>
+        <input id="username" placeholder="usuario"/>
+
+        <label>Contraseña</label>
+        <input id="password" type="password" placeholder="contraseña"/>
+
+        <button id="btnLogin">Entrar</button>
+        <div id="error" class="error" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/static/js/ui_login.js"></script>
+</body>
+</html>
