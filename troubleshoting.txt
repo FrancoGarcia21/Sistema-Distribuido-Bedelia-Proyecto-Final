@@ -1,0 +1,54 @@
+6. TROUBLESHOOTING
+6.1 Regla no se dispara (Matched = 0)
+Verificar en Dashboard:
+
+Data Integration → Rules
+Click en la regla problemática
+Ver sección SQL y Metrics
+Causas comunes:
+
+Problema	Verificación	Solución
+Topic incorrecto	Verificar FROM en SQL	Debe coincidir con topic publicado
+Payload no es JSON	Probar en MQTT Explorer	Enviar JSON válido
+JWT inválido	Probar conexión	Generar nuevo JWT
+6.2 Regla se dispara pero no pasa (Passed = 0)
+Causa: El WHERE de la regla no se cumple.
+
+Verificar en Dashboard:
+
+Ver SQL de la regla
+Ver ejemplo de payload en Metrics → Recent Messages
+Comando consola (ver payload de prueba):
+
+Copymosquitto_sub -h localhost -p 1883 -t "universidad/aulas/solicitud" -v
+(En otra terminal publicar mensaje de prueba)
+
+6.3 Action MongoDB falla (Failed > 0)
+Dashboard EMQX:
+
+Data Integration → Connectors
+Verificar que mongodb_smartcampus está Connected (verde)
+Si está desconectado:
+
+Copy# Verificar MongoDB
+docker exec -it mongo-primary mongosh --eval "db.adminCommand('ping')"
+
+# Verificar red
+docker exec -it emqx ping -c 3 mongo-primary
+
+# Restart connector en Dashboard
+6.4 Error JWT "Not authorized"
+Verificar secret:
+
+Copy# Secret en Bedelia
+docker exec -it app_bedelia python -c "from config import SECRET_KEY; print(SECRET_KEY)"
+
+# Debe coincidir con Dashboard EMQX:
+# Access Control → Authentication → JWT → Secret
+Generar nuevo JWT:
+
+Copydocker exec -it app_bedelia python -c "
+import sys; sys.path.insert(0, '/app')
+from utils.jwt_helper import JWTHelper
+print(JWTHelper.generar_token({'usuario': 'test', 'rol': 'profesor'}))
+"

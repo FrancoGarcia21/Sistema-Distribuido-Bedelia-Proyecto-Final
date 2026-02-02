@@ -1,0 +1,801 @@
+1.2 Crear Connector en EMQX Dashboard
+URL Dashboard: http://localhost:18083
+
+Credenciales:
+
+Usuario: admin
+Password: public
+Navegación:
+
+Click en Integration (menú izquierdo)
+Click en Connectors
+Click en + Create Connector
+Buscar y seleccionar MongoDB
+
+1.3 Configuración del Connector
+Formulario completo:
+
+Campo	                    Valor
+Connector Name	           mongodb_smartcampus
+MongoDB Type	           rs (Replica Set)
+Server List	               mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017
+Replica Set Name	       rs0
+Database	               smartcampus
+Write Concern              w1
+Read Mode	               master
+Auth Source                (vacío)
+Username	                (vacío)
+Password	                (vacío)
+Use Legacy Protocol	       false
+SSL/TLS	                    Disabled
+Pool Size	                8
+Botón:                      Click en Test Connection
+
+# Resultado esperado:
+
+✅ Connection successful
+Connected to: mongo-primary:27017
+Replica Set: rs0
+Database: smartcampus
+
+Botón: Click en Create
+
+###########################################3
+
+1.4 Verificar en Dashboard
+Navegación:
+
+Integration → Connectors
+Buscar mongodb_smartcampus
+Estado debe ser: Connected (verde)
+
+2. LAS 14 REGLAS PASO A PASO
+🎯 Arquitectura de Validación
+universidad/aulas/solicitud (topic inicial)
+    ↓
+[REGLA 1A] Horario 06:00-23:00 ✓ → paso2
+[REGLA 1B] Horario inválido ✗ → errores/horario-invalido
+    ↓
+[REGLA 2] Rol Profesor (JWT) → paso3
+    ↓
+[REGLA 3A] Duración 45-240min ✓ → paso4
+[REGLA 3B] Duración inválida ✗ → errores/duracion-invalida
+    ↓
+[REGLA 4A] Cupo válido ✓ → paso5
+[REGLA 4B] Cupo excedido ✗ → errores/cupo-excedido
+    ↓
+[REGLA 5A] Consultar Aula MongoDB → paso5-resultado
+[REGLA 5B] Aula encontrada ✓ → paso6
+[REGLA 5C] Aula no disponible ✗ → errores/aula-no-disponible
+    ↓
+[REGLA 6A] Consultar Profesor MongoDB → paso6-resultado
+[REGLA 6B] Profesor autorizado ✓ → validacion/aprobada
+[REGLA 6C] Profesor no autorizado ✗ → errores/profesor-no-autorizado
+    ↓
+[REGLA 7] Persistir en MongoDB → cronograma-creado
+
+#############################################33
+REGLA 1A: HORARIO VÁLIDO
+Dashboard EMQX:
+
+Integration → Rules
++ Create
+Configuración:
+Campo	        Valor
+Name	        regla_01_horario_valido
+Note	        Valida que el horario esté entre 06:00 y 23:00
+Enable	        true
+
+sql:
+SELECT
+  payload.id_aula as id_aula,
+  payload.id_profesor as id_profesor,
+  payload.id_materia as id_materia,
+  payload.id_carrera as id_carrera,
+  payload.fecha as fecha,
+  payload.hora_inicio as hora_inicio,
+  payload.hora_fin as hora_fin,
+  payload.duracion_minutos as duracion_minutos,
+  payload.cupo_actual as cupo_actual,
+  payload.cupo_maximo as cupo_maximo,
+  payload.tipo as tipo,
+  payload
+FROM
+  "universidad/aulas/solicitud"
+WHERE
+  payload.hora_inicio >= '06:00'
+  AND 
+  payload.hora_inicio < '23:00'
+  AND
+  payload.hora_fin <= '23:00'
+
+-Actions:
+
+Click + Add Action
+Seleccionar Message Republish
+Configurar:
+Campo       	Valor
+Topic       	universidad/aulas/validacion/paso2
+QoS	            1
+Retain	        false
+Payload	        ${payload}
+
+Click Create
+
+#############################################3
+REGLA 1B: HORARIO INVÁLIDO
+Configuración:
+
+Campo	Valor
+Name	regla_01_horario_invalido
+Note	Rechaza mensajes fuera del horario permitido
+
+SQL:
+SELECT
+  payload.hora_inicio as hora_inicio,
+  payload.hora_fin as hora_fin,
+  payload.id_profesor as id_profesor,
+  payload
+FROM
+  "universidad/aulas/solicitud"
+WHERE
+  payload.hora_inicio < '06:00'
+  OR
+  payload.hora_inicio >= '23:00'
+  OR
+  payload.hora_fin > '23:00'
+
+-Action: Message Republish
+
+Campo	    Valor
+Topic	    universidad/errores/horario-invalido
+QoS	        1
+Payload  Template:
+                {
+                "error": "horario_invalido",
+                "mensaje": "El horario debe estar entre 06:00 y 23:00",
+                "hora_inicio": "${hora_inicio}",
+                "hora_fin": "${hora_fin}",
+                "id_profesor": "${id_profesor}",
+                "timestamp": "${timestamp}",
+                "regla": "regla_01_horario_invalido"
+                }
+
+##############################################
+REGLA 2: ROL PROFESOR (Paso directo)
+Nota: La validación de rol se hace en JWT. Esta regla solo pasa el mensaje.
+
+Configuración:
+
+Campo	Valor
+Name	regla_02_paso_rol
+Note	Pasa al siguiente paso (rol validado en JWT)
+SQL:
+
+SELECT payload
+FROM "universidad/aulas/validacion/paso2"
+
+-Action: Message Republish
+
+Campo	Valor
+Topic	universidad/aulas/validacion/paso3
+Payload	${payload}
+
+##############################################
+REGLA 3A: DURACIÓN VÁLIDA
+Campo	Valor
+Name	regla_03_duracion_valida
+Note	Valida duración entre 45 y 240 minutos
+SQL:
+SELECT
+  payload.duracion_minutos as duracion,
+  payload
+FROM
+  "universidad/aulas/validacion/paso3"
+WHERE
+  payload.duracion_minutos >= 45
+  AND
+  payload.duracion_minutos <= 240
+
+  Action: Message Republish → universidad/aulas/validacion/paso4
+
+  ##############################################
+
+REGLA 3B: DURACIÓN INVÁLIDA
+SQL:
+
+SELECT
+  payload.duracion_minutos as duracion,
+  payload.id_profesor as id_profesor,
+  payload
+FROM
+  "universidad/aulas/validacion/paso3"
+WHERE
+  payload.duracion_minutos < 45
+  OR
+  payload.duracion_minutos > 240
+
+-Action: Message Republish → universidad/errores/duracion-invalida
+
+Payload Template:
+                {
+                "error": "duracion_invalida",
+                "mensaje": "La duración debe estar entre 45 y 240 minutos",
+                "duracion_minutos": ${duracion},
+                "id_profesor": "${id_profesor}",
+                "timestamp": "${timestamp}"
+                }
+
+##############################################
+
+REGLA 4A: CUPO VÁLIDO
+SQL:
+
+CopySELECT
+  payload.cupo_actual as cupo_actual,
+  payload.cupo_maximo as cupo_maximo,
+  payload
+FROM
+  "universidad/aulas/validacion/paso4"
+WHERE
+  payload.cupo_actual <= payload.cupo_maximo
+
+-Action: Message Republish → universidad/aulas/validacion/paso5
+
+###############################################
+
+REGLA 4B: CUPO EXCEDIDO
+SQL:
+
+SELECT
+  payload.cupo_actual as cupo_actual,
+  payload.cupo_maximo as cupo_maximo,
+  payload.id_profesor as id_profesor,
+  payload
+FROM
+  "universidad/aulas/validacion/paso4"
+WHERE
+  payload.cupo_actual > payload.cupo_maximo
+
+-Action: Message Republish → universidad/errores/cupo-excedido
+
+##############################################
+
+REGLA 5A: CONSULTAR AULA (MongoDB Find)
+⚠️ IMPORTANTE: Esta regla tiene 3 partes (5A, 5B, 5C)
+
+SQL:
+
+SELECT
+  payload.id_aula as id_aula,
+  payload as payload_original
+FROM
+  "universidad/aulas/validacion/paso5"
+Action: MongoDB Find
+
+1-Click + Add Action
+2-Buscar MongoDB
+3-Seleccionar Find
+4-Configurar:
+
+Campo	    Valor
+Connector	mongodb_smartcampus
+Collection	aulas
+Filter:
+        {
+        "_id": {"$oid": "${id_aula}"},
+        "estado": "disponible"
+        }
+
+Response Handling:
+
+Campo	            Valor
+Response Action	    Republish
+Response Topic	    universidad/aulas/validacion/paso5-resultado
+Response Payload Template:
+                    {
+                    "query_result": ${.},
+                    "payload_original": ${payload_original}
+                    }
+
+##########################################
+
+REGLA 5B: AULA ENCONTRADA
+SQL:
+
+SELECT
+  payload.payload_original as datos_originales,
+  payload.query_result as resultado_aula
+FROM
+  "universidad/aulas/validacion/paso5-resultado"
+WHERE
+  array_length(payload.query_result) > 0
+
+--> Explicación: array_length(...) > 0 significa que MongoDB encontró documentos.
+
+Action: Message Republish → universidad/aulas/validacion/paso6
+
+Payload: ${datos_originales}
+
+##########################################
+
+REGLA 5C: AULA NO DISPONIBLE
+SQL:
+
+SELECT
+  payload.payload_original as datos_originales,
+  payload.query_result as resultado_aula
+FROM
+  "universidad/aulas/validacion/paso5-resultado"
+WHERE
+  array_length(payload.query_result) = 0
+
+-Action: Message Republish → universidad/errores/aula-no-disponible
+
+Payload Template:
+                {
+                "error": "aula_no_disponible",
+                "mensaje": "El aula no existe o no está disponible",
+                "id_aula": "${datos_originales.id_aula}",
+                "id_profesor": "${datos_originales.id_profesor}",
+                "timestamp": "${timestamp}"
+                }
+
+#########################################
+REGLA 6A: CONSULTAR PROFESOR (MongoDB Find)
+SQL:
+
+SELECT
+  payload.id_profesor as id_profesor,
+  payload.id_materia as id_materia,
+  payload.id_carrera as id_carrera,
+  payload as payload_original
+FROM
+  "universidad/aulas/validacion/paso6"
+
+-Action: MongoDB Find
+Campo	    Valor
+Collection	profesor_carrera_materia
+
+Filter:
+        {
+        "id_profesor": {"$oid": "${id_profesor}"},
+        "id_materia": {"$oid": "${id_materia}"},
+        "carrera": "${id_carrera}",
+        "activa": true
+        }
+
+Response Topic: universidad/aulas/validacion/paso6-resultado
+
+##########################################
+REGLA 6B: PROFESOR AUTORIZADO
+SQL:
+
+SELECT
+  payload.payload_original as datos_originales
+FROM
+  "universidad/aulas/validacion/paso6-resultado"
+WHERE
+  array_length(payload.query_result) > 0
+
+-Action: Message Republish → universidad/aulas/validacion/aprobada
+
+##########################################
+REGLA 6C: PROFESOR NO AUTORIZADO
+SQL:
+
+SELECT
+  payload.payload_original as datos_originales
+FROM
+  "universidad/aulas/validacion/paso6-resultado"
+WHERE
+  array_length(payload.query_result) = 0
+
+-Action: Message Republish → universidad/errores/profesor-no-autorizado
+
+##########################################
+REGLA 7: PERSISTIR CRONOGRAMA (MongoDB Insert)
+⚠️ REGLA FINAL
+
+SQL:
+
+SELECT payload FROM "universidad/aulas/validacion/aprobada"
+
+Action: MongoDB Insert One
+
+Campo	      Valor
+Collection	  cronograma
+Document:
+        {
+        "id_aula": {"$oid": "${payload.id_aula}"},
+        "id_profesor": {"$oid": "${payload.id_profesor}"},
+        "id_materia": {"$oid": "${payload.id_materia}"},
+        "id_carrera": "${payload.id_carrera}",
+        "fecha": "${payload.fecha}",
+        "hora_inicio": "${payload.hora_inicio}",
+        "hora_fin": "${payload.hora_fin}",
+        "duracion_minutos": ${payload.duracion_minutos},
+        "cupo_actual": ${payload.cupo_actual},
+        "estado": "activo",
+        "tipo": "${payload.tipo}",
+        "created_at": {"$date": "${timestamp}"}
+        }
+
+Response Topic (opcional): universidad/aulas/cronograma-creado
+
+Todas deben tener Status: Enabled (verde)
+
+###########################################
+                    JWT
+###########################################
+
+3. CONFIGURACIÓN DE AUTENTICACIÓN JWT
+3.1 Crear Autenticador JWT
+Dashboard EMQX:
+
+1-Access Control → Authentication
+2- + Create
+
+Configuración:
+Campo	                    Valor
+Mechanism	                Password-Based
+Backend	                    JWT
+JWT From	                password
+Algorithm	                hmac-based
+Secret	                    bedelia_secret_key
+Secret Base64 Encoded	    false
+Verify Claims           	{} (vacío)
+Enable	                    true
+
+Botón: Click Create
+
+########################################
+
+3.2 Verificar JWT en Dashboard
+Navegación:
+
+Access Control → Authentication
+Buscar jwt
+Estado debe ser: Enabled (verde)
+
+#####################################
+3.3 Generar JWT desde Consola
+Comando:
+
+docker exec -it app_bedelia python -c "
+import sys
+sys.path.insert(0, '/app')
+from utils.jwt_helper import JWTHelper
+token = JWTHelper.generar_token({
+    'usuario': 'prof_test',
+    'rol': 'profesor',
+    'id_usuario': '69782822e3bbc9e3e6663728'
+})
+print(token)
+"
+Copiar el token generado (será algo como: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...)
+
+###############################################3
+
+4. PRUEBAS DESDE NAVEGADOR Y CONSOLA
+4.1 Preparar Datos en MongoDB
+Comando consola:
+docker exec -it mongo-primary mongosh --eval "
+use smartcampus;
+
+// Configurar aula disponible
+db.aulas.updateOne(
+  {_id: ObjectId('69782821e3bbc9e3e6663726')},
+  {\$set: {estado: 'disponible', cupo: 40}}
+);
+
+// Configurar asignación profesor-materia
+db.profesor_carrera_materia.updateOne(
+  {
+    id_profesor: ObjectId('69782822e3bbc9e3e6663728'),
+    id_materia: ObjectId('69782c1728e4a86d0566693e')
+  },
+  {\$set: {
+    carrera: 'Ingeniería en Sistemas',
+    activa: true,
+    fecha_asignacion: new Date()
+  }},
+  {upsert: true}
+);
+
+print('Datos preparados correctamente');
+"
+
+#######################################
+4.2 Prueba desde MQTT Explorer (Navegador/Aplicación)
+Descargar: http://mqtt-explorer.com/
+
+Configurar conexión:
+Campo	                Valor
+Protocol	            mqtt://
+Host	                localhost
+Port	                1883
+Username	            (pegar el JWT generado)
+Password	            (dejar vacío)
+Botón: Click Connect
+
+#####################################3
+Publicar mensaje de prueba:
+
+Topic: universidad/aulas/solicitud
+QoS: 1
+Payload:
+{
+  "id_aula": "69782821e3bbc9e3e6663726",
+  "id_profesor": "69782822e3bbc9e3e6663728",
+  "id_materia": "69782c1728e4a86d0566693e",
+  "id_carrera": "Ingeniería en Sistemas",
+  "fecha": "2026-01-28",
+  "hora_inicio": "14:00",
+  "hora_fin": "16:00",
+  "duracion_minutos": 120,
+  "cupo_actual": 10,
+  "cupo_maximo": 40,
+  "tipo": "teorica"
+}
+
+Click Publish
+############################################################
+Suscribirse para ver resultados:
+
+Click en + Add subscription
+Topic: universidad/aulas/validacion/#
+Click en + Add subscription (otra vez)
+Topic: universidad/errores/#
+Click en + Add subscription (tercera vez)
+Topic: universidad/aulas/cronograma-creado
+Deberías ver mensajes llegando en cada paso de validación.
+
+##############################################
+4.3 Prueba desde Consola (mosquitto_pub/sub)
+Terminal 1: Suscribirse a resultados
+mosquitto_sub -h localhost -p 1883 -t "universidad/aulas/validacion/#" -v
+
+Terminal 2: Suscribirse a errores
+
+mosquitto_sub -h localhost -p 1883 -t "universidad/errores/#" -v
+
+Terminal 3: Publicar mensaje
+# Primero generar JWT
+JWT=$(docker exec -it app_bedelia python -c "
+import sys; sys.path.insert(0, '/app')
+from utils.jwt_helper import JWTHelper
+print(JWTHelper.generar_token({'usuario': 'test', 'rol': 'profesor'}))
+" | tr -d '\r\n')
+
+# Publicar
+mosquitto_pub \
+  -h localhost \
+  -p 1883 \
+  -t "universidad/aulas/solicitud" \
+  -u "$JWT" \
+  -P "" \
+  -q 1 \
+  -m '{
+    "id_aula": "69782821e3bbc9e3e6663726",
+    "id_profesor": "69782822e3bbc9e3e6663728",
+    "id_materia": "69782c1728e4a86d0566693e",
+    "id_carrera": "Ingeniería en Sistemas",
+    "fecha": "2026-01-28",
+    "hora_inicio": "14:00",
+    "hora_fin": "16:00",
+    "duracion_minutos": 120,
+    "cupo_actual": 10,
+    "cupo_maximo": 40,
+    "tipo": "teorica"
+  }'
+
+##########################################
+4.4 Verificar Resultado en MongoDB
+Comando consola:
+docker exec -it mongo-primary mongosh --eval "
+use smartcampus;
+db.cronograma.findOne(
+  {
+    id_aula: ObjectId('69782821e3bbc9e3e6663726'),
+    fecha: '2026-01-28'
+  },
+  {
+    _id: 1,
+    estado: 1,
+    hora_inicio: 1,
+    hora_fin: 1,
+    cupo_actual: 1
+  }
+);
+"
+
+Salida esperada:
+{
+  "_id": ObjectId("..."),
+  "estado": "activo",
+  "hora_inicio": "14:00",
+  "hora_fin": "16:00",
+  "cupo_actual": 10
+}
+
+########################################
+4.5 Ver Métricas en Dashboard EMQX
+Navegador: http://localhost:18083
+
+Navegación:
+
+1-Data Integration → Rules
+2-Click en cualquier regla (ej: regla_01_horario_valido)
+3-Ver sección Metrics:
+            Matched: Mensajes evaluados
+            Passed: Mensajes que pasaron el WHERE
+            Failed: Mensajes con error
+            Actions Success: Operaciones exitosas
+
+######################################################
+4.6 Ver Métricas vía API REST
+Navegador: Abrir Developer Tools (F12) → Console
+
+JavaScript:
+// Autenticación
+const auth = btoa('admin:public');
+
+// Obtener todas las reglas con métricas
+fetch('http://localhost:18083/api/v5/rules', {
+  headers: {
+    'Authorization': 'Basic ' + auth,
+    'Content-Type': 'application/json'
+  }
+})
+.then(r => r.json())
+.then(data => {
+  console.table(data.data.map(rule => ({
+    Nombre: rule.name,
+    Estado: rule.enable ? 'Enabled' : 'Disabled',
+    Matched: rule.metrics?.matched || 0,
+    Passed: rule.metrics?.passed || 0,
+    Failed: rule.metrics?.failed || 0
+  })));
+});
+Resultado: Tabla con métricas de todas las reglas.
+
+#############################################
+4.7 Prometheus Metrics (si está configurado)
+Navegador: http://localhost:9090 (Prometheus UI)
+
+Query examples:
+
+# Métricas de EMQX
+emqx_messages_received_total
+
+# Métricas de Rules Engine
+emqx_rule_matched_total{rule_id="regla_01_horario_valido"}
+
+# Métricas de MongoDB connector
+emqx_bridge_mongodb_success_total
+
+###########################################
+.8 Pruebas de Rechazo
+Test 1: Horario inválido (05:00)
+{
+  "hora_inicio": "05:00",
+  "hora_fin": "07:00",
+  "duracion_minutos": 120,
+  "cupo_actual": 10,
+  "cupo_maximo": 40
+}
+
+Resultado esperado: Mensaje en universidad/errores/horario-invalido
+
+#########################################3
+Test 2: Duración inválida (30 min)
+{
+  "hora_inicio": "14:00",
+  "hora_fin": "14:30",
+  "duracion_minutos": 30,
+  "cupo_actual": 10,
+  "cupo_maximo": 40
+}
+Resultado esperado: Mensaje en universidad/errores/duracion-invalida
+
+########################################
+Test 3: Cupo excedido
+{
+  "hora_inicio": "14:00",
+  "hora_fin": "16:00",
+  "duracion_minutos": 120,
+  "cupo_actual": 50,
+  "cupo_maximo": 40
+}
+
+Resultado esperado: Mensaje en universidad/errores/cupo-excedido
+
+########################################3
+5. BACKUP Y RESTAURACIÓN
+5.1 Persistencia con Volumen Docker
+Editar docker-compose.yml:
+
+Agregar en la sección emqx:
+volumes:
+  - emqx_data:/opt/emqx/data
+
+  Agregar al final del archivo:
+
+volumes:
+    emqx_data:
+    driver: local
+
+Aplicar:
+docker-compose down
+docker-compose up -d
+##########################################################3
+Ahora la configuración persiste permanentemente ✅
+
+5.2 Backup Manual (Consola)
+Backup:
+
+# Crear directorio
+mkdir -p backups/emqx
+
+# Copiar configuración
+docker cp emqx:/opt/emqx/data/configs/cluster.hocon backups/emqx/
+
+# Backup con timestamp
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+tar -czf backups/emqx_backup_$TIMESTAMP.tar.gz backups/emqx/
+
+echo "Backup creado: backups/emqx_backup_$TIMESTAMP.tar.gz"
+
+Restaurar:
+# Extraer backup
+tar -xzf backups/emqx_backup_20260128_153045.tar.gz
+
+# Copiar al contenedor
+docker cp backups/emqx/cluster.hocon emqx:/opt/emqx/data/configs/
+
+# Reiniciar
+docker-compose restart emqx
+
+############################################333
+5.3 Export vía API REST (Navegador)
+Abrir Developer Tools (F12) → Console
+
+JavaScript:
+// Exportar todas las reglas
+const auth = btoa('admin:public');
+
+fetch('http://localhost:18083/api/v5/rules', {
+  headers: {'Authorization': 'Basic ' + auth}
+})
+.then(r => r.json())
+.then(data => {
+  // Descargar como JSON
+  const blob = new Blob([JSON.stringify(data.data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'emqx_rules_backup.json';
+  a.click();
+  console.log('Backup descargado');
+});
+Resultado: Archivo emqx_rules_backup.json descargado.
+
+###############################################
+5.4 Backup MongoDB
+Consola:
+# Backup
+docker exec -it mongo-primary mongodump --db smartcampus --out /tmp/backup
+
+# Copiar a host
+docker cp mongo-primary:/tmp/backup ./backups/mongodb_$(date +%Y%m%d_%H%M%S)
+
+# Limpiar contenedor
+docker exec -it mongo-primary rm -rf /tmp/backup
+
+Restaurar:
+# Copiar al contenedor
+docker cp ./backups/mongodb_20260128_153045 mongo-primary:/tmp/restore
+
+# Restaurar
+docker exec -it mongo-primary mongorestore --db smartcampus /tmp/restore/smartcampus --drop

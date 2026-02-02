@@ -123,11 +123,54 @@ services:
   # =========================
   # EMQX (mTLS FUNCIONAL)
   # =========================
+  # emqx:
+  #   image: emqx/emqx:5.5
+  #   container_name: emqx
+  #   hostname: emqx
+  #   user: "0:0"   # CLAVE en Windows (permisos de server.key)
+  #   depends_on:
+  #     certs-generator:
+  #       condition: service_completed_successfully
+  #   ports:
+  #     - "1883:1883"
+  #     - "8883:8883"
+  #     - "8083:8083"
+  #     - "18083:18083"
+  #   environment:
+  #     EMQX_NODE__NAME: emqx@emqx
+  #     EMQX_NODE__COOKIE: "cookie_super_larga_random_123456"
+
+  #     EMQX_LISTENERS__WSS__DEFAULT__ENABLE: "false"
+
+
+  #     EMQX_ALLOW_ANONYMOUS: "false"
+  #     EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+  #     EMQX_DASHBOARD__DEFAULT_PASSWORD: admin
+
+  #     EMQX_LISTENERS__SSL__DEFAULT__BIND: "0.0.0.0:8883"
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CACERTFILE: /opt/emqx/etc/certs/ca.crt
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE: /opt/emqx/etc/certs/server.crt
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: /opt/emqx/etc/certs/server.key
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: verify_peer
+  #     EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__FAIL_IF_NO_PEER_CERT: "true"
+
+  #   volumes:
+  #     - emqx_data:/opt/emqx/data
+  #     - emqx_log:/opt/emqx/log
+  #     - ./infra/certs:/opt/emqx/etc/certs:ro
+  #   networks:
+  #     - smartcampus_net
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "ps | grep -q '[b]eam.smp'"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 60s
   emqx:
-    image: emqx/emqx:5.5
+    image: emqx/emqx:latest 
     container_name: emqx
     hostname: emqx
-    user: "0:0"   # CLAVE en Windows (permisos de server.key)
+    user: "0:0"
     depends_on:
       certs-generator:
         condition: service_completed_successfully
@@ -142,7 +185,6 @@ services:
 
       EMQX_LISTENERS__WSS__DEFAULT__ENABLE: "false"
 
-
       EMQX_ALLOW_ANONYMOUS: "false"
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
       EMQX_DASHBOARD__DEFAULT_PASSWORD: admin
@@ -153,6 +195,14 @@ services:
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: /opt/emqx/etc/certs/server.key
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: verify_peer
       EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__FAIL_IF_NO_PEER_CERT: "true"
+
+      # =========================
+      # MongoDB Bridge (NUEVO)
+      # =========================
+      EMQX_MONGODB__SERVER: mongo-primary:27017
+      EMQX_MONGODB__POOL_SIZE: 8
+      EMQX_MONGODB__DATABASE: smartcampus
+      EMQX_MONGODB__TYPE: single
 
     volumes:
       - emqx_data:/opt/emqx/data
@@ -256,3 +306,50 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  app_alumno:
+    build:
+      context: ./apps/alumno
+      dockerfile: dockerfile
+    container_name: app_alumno
+    command: ["python", "app.py"]
+    depends_on:
+      certs-generator:
+        condition: service_completed_successfully
+      mongo-init:
+        condition: service_completed_successfully
+      emqx:
+        condition: service_healthy
+    environment:
+      APP_NAME: App_Alumno
+      DEBUG: "true"
+
+      MONGO_URI: mongodb://mongo-primary:27017,mongo-secondary1:27017,mongo-secondary2:27017/smartcampus?replicaSet=rs0
+      MONGO_DB_NAME: smartcampus
+
+      JWT_SECRET: "dev_secret_change_me"
+      JWT_ALGORITHM: "HS256"
+      JWT_EXP_MINUTES: "60"
+
+      MQTT_BROKER_HOST: emqx
+      MQTT_BROKER_PORT: "8883"
+      MQTT_TLS_ENABLED: "true"
+      MQTT_TLS_CA_CERT: "/opt/certs/ca.crt"
+      MQTT_TLS_CERT: "/opt/certs/alumno.crt"
+      MQTT_TLS_KEY: "/opt/certs/alumno.key"
+
+      MQTT_JWT_MODE: "password"
+
+    volumes:
+      - ./infra/certs:/opt/certs:ro
+    ports:
+      - "5001:5001"
+    networks:
+      - smartcampus_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

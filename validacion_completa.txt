@@ -1,0 +1,31 @@
+6.5 Verificación Completa (Consola)
+Check de todos los servicios:
+echo "=== Estado de Contenedores ==="
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "emqx|mongo|redis|bedelia"
+
+echo -e "\n=== MongoDB Replica Set ==="
+docker exec -it mongo-primary mongosh --quiet --eval "rs.status().ok"
+
+echo -e "\n=== EMQX Dashboard ==="
+curl -s http://localhost:18083 > /dev/null && echo "✅ Accesible" || echo "❌ No accesible"
+
+echo -e "\n=== Connector MongoDB ==="
+curl -s -u admin:public http://localhost:18083/api/v5/connectors | \
+  grep -o '"name":"mongodb_smartcampus","status":"connected"' && \
+  echo "✅ Conectado" || echo "❌ Desconectado"
+
+echo -e "\n=== Reglas Activas ==="
+curl -s -u admin:public http://localhost:18083/api/v5/rules | \
+  grep -o '"enable":true' | wc -l | xargs echo "Reglas activas:"
+
+#########################################33
+6.6 Logs Útiles
+EMQX:
+docker-compose logs emqx --tail=50
+
+Bedelia:
+
+docker-compose logs app_bedelia --tail=50
+MongoDB:
+
+docker-compose logs mongo-primary --tail=30
